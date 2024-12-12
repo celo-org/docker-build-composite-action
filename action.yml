@@ -131,6 +131,6 @@ runs:
 
     - name: Run Trivy vulnerability scanner
       continue-on-error: true
-      uses: celo-org/trivy-composite-action@v1.0.1
+      uses: celo-org/trivy-composite-action@v1.0.0-alpha
       with:
         image-ref: ${{ steps.process_tags.outputs.first_tag }}
