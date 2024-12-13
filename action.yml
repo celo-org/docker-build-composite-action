@@ -98,7 +98,6 @@ runs:
         set +e
         docker create --name="tmp_container" ${{ steps.docker-build.outputs.imageid }}
         found=$(docker export tmp_container | tar tf - | grep -e "gha-creds-.*.json" | wc -l)
-        echo "found is $found"
         if [ $found -ge 1 ]; then
             echo -e "::error::Found oidc credentials\nAdd the following line to your .dockerignore file\ngha-creds-*.json"
         fi
