@@ -32,9 +32,6 @@ inputs:
 
 runs:
   using: "composite"
-  env:
-    REGISTRY: ${{ inputs.registry }}
-    TAGS: ${{ inputs.tags }}
   steps:
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
@@ -44,6 +41,9 @@ runs:
 
     - name: Conditionally format tags with full image + repo definition
       id: process_tags
+      env:
+        REGISTRY: ${{ inputs.registry }}
+        TAGS: ${{ inputs.tags }}
       shell: bash
       run: |
         function process_tags() {
@@ -123,6 +123,9 @@ runs:
     - name: Sign container image
       env:
         COSIGN_EXPERIMENTAL: "true"
+        REGISTRY: ${{ inputs.registry }}
+        TAGS: ${{ inputs.tags }}
+
       shell: bash
       run: |
         cosign sign --yes ${{ env.REGISTRY }}@${{ steps.docker-build-push.outputs.digest }}
