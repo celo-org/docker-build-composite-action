@@ -122,7 +122,7 @@ runs:
 
     - name: Sign container image
       env:
-        COSIGN_EXPERIMENTAL: "true"
+        COSIGN_EXPERIMENTAL: "true" # Enables experimental features
         REGISTRY: ${{ inputs.registry }}
       shell: bash
       run: |
