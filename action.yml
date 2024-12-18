@@ -59,7 +59,7 @@ runs:
                     ;;
                 *)
                     # tag needs to include full host + repo definition
-                    processed_tags+=("$registry:$tag")
+                    processed_tags+=("${{env.REGISTRY }}:$tag")
                     ;;
                 esac
             done
