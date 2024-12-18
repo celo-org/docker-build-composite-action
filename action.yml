@@ -124,8 +124,6 @@ runs:
       env:
         COSIGN_EXPERIMENTAL: "true"
         REGISTRY: ${{ inputs.registry }}
-        TAGS: ${{ inputs.tags }}
-
       shell: bash
       run: |
         cosign sign --yes ${{ env.REGISTRY }}@${{ steps.docker-build-push.outputs.digest }}
