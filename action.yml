@@ -32,6 +32,9 @@ inputs:
 
 runs:
   using: "composite"
+  env:
+    REGISTRY: ${{ inputs.registry }}
+    TAGS: ${{ inputs.tags }}
   steps:
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
@@ -44,12 +47,10 @@ runs:
       shell: bash
       run: |
         function process_tags() {
-            local registry="${{ inputs.registry }}"
-            local raw_tags="${{ inputs.tags }}"
             local processed_tags=()
 
-            # split tag field on comma character and add project + registry + image_name 
-            IFS=',' read -ra tags <<< "$raw_tags"
+            # split tag field on comma character and add project + ${{ env.REGISTRY }} + image_name 
+            IFS=',' read -ra tags <<< "${{ env.TAGS }}"
             for tag in "${tags[@]}"; do
                 case "$tag" in 
                 *:*)
@@ -124,7 +125,7 @@ runs:
         COSIGN_EXPERIMENTAL: "true"
       shell: bash
       run: |
-        cosign sign --yes ${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }}
+        cosign sign --yes ${{ env.REGISTRY }}@${{ steps.docker-build-push.outputs.digest }}
 
     - name: Run Trivy vulnerability scanner
       continue-on-error: true
