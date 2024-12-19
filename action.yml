@@ -136,3 +136,4 @@ runs:
       with:
         image-ref: ${{ steps.process_tags.outputs.first_tag }}
         scan-type: image
+        app: Docker
