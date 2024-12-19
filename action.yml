@@ -81,7 +81,7 @@ runs:
     - name: Build container image
       uses: docker/build-push-action@v6
       env:
-        DOCKER_BUILD_SUMMARY: true
+        DOCKER_BUILD_SUMMARY: false 
       id: docker-build
       with:
         platforms: ${{ inputs.runner_platform }}
