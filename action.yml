@@ -133,3 +133,4 @@ runs:
       uses: celo-org/trivy-composite-action@v1.0.0-alpha
       with:
         image-ref: ${{ steps.process_tags.outputs.first_tag }}
+        scan-type: image
