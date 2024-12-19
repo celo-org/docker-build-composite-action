@@ -80,6 +80,8 @@ runs:
 
     - name: Build container image
       uses: docker/build-push-action@v6
+      env:
+        DOCKER_BUILD_SUMMARY: true
       id: docker-build
       with:
         platforms: ${{ inputs.runner_platform }}
@@ -90,6 +92,7 @@ runs:
         tags: ${{ steps.process_tags.outputs.processed }}
         load: true
         build-args: ${{ inputs.build-args }}
+         
 
     - name: Scan for OIDC credentials
       shell: bash
