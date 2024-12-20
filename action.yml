@@ -132,12 +132,12 @@ runs:
 #        cosign sign --yes ${{ env.REGISTRY }}@${{ steps.docker-build-push.outputs.digest }}
 #
 
-     - name: Generate artifact attestation
-       uses: actions/attest-build-provenance@v2
-       with:
-         subject-name: ${{ env.REGISTRY }}
-         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
-         push-to-registry: true
+    - name: Generate artifact attestation
+      uses: actions/attest-build-provenance@v2
+      with:
+        subject-name: ${{ env.REGISTRY }}
+        subject-digest: ${{ steps.docker-build-push.outputs.digest }}
+        push-to-registry: true
 
     - name: Run Trivy vulnerability scanner
       uses: celo-org/trivy-composite-action@v1.0.0-alpha
