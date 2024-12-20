@@ -121,15 +121,23 @@ runs:
         cache-to: type=registry,ref=${{ inputs.registry }}:buildcache,mode=max
         provenance: ${{ fromJSON(true) }}
 
-    - uses: sigstore/cosign-installer@main
+#    - uses: sigstore/cosign-installer@main
+#
+#    - name: Sign container image
+#      env:
+#        COSIGN_EXPERIMENTAL: "true" # Enables experimental features
+#        REGISTRY: ${{ inputs.registry }}
+#      shell: bash
+#      run: |
+#        cosign sign --yes ${{ env.REGISTRY }}@${{ steps.docker-build-push.outputs.digest }}
+#
 
-    - name: Sign container image
-      env:
-        COSIGN_EXPERIMENTAL: "true" # Enables experimental features
-        REGISTRY: ${{ inputs.registry }}
-      shell: bash
-      run: |
-        cosign sign --yes ${{ env.REGISTRY }}@${{ steps.docker-build-push.outputs.digest }}
+     - name: Generate artifact attestation
+       uses: actions/attest-build-provenance@v2
+       with:
+         subject-name: ${{ env.REGISTRY }}
+         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
+         push-to-registry: true
 
     - name: Run Trivy vulnerability scanner
       uses: celo-org/trivy-composite-action@v1.0.0-alpha
