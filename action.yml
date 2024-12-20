@@ -136,7 +136,6 @@ runs:
       uses: actions/attest-build-provenance@v2
       env:
         REGISTRY: ${{ inputs.registry }}
-
       with:
         subject-name: ${{ env.REGISTRY }}
         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
@@ -148,3 +147,4 @@ runs:
         image-ref: ${{ steps.process_tags.outputs.first_tag }}
         scan-type: image
         app: Docker
+        github-token: ${{ env.GOOGLE_GHA_CREDS_PATH }}
