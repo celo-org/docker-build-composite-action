@@ -137,4 +137,3 @@ runs:
         image-ref: ${{ steps.process_tags.outputs.first_tag }}
         scan-type: image
         app: Docker
-        github-token: ${{ env.GOOGLE_GHA_CREDS_PATH }}
