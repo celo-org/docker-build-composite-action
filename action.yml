@@ -130,6 +130,7 @@ runs:
         cache-from: type=local,src=cache
         cache-to: type=registry,ref=${{ inputs.registry }}:buildcache,mode=max
         provenance: ${{ fromJSON(true) }}
+        sbom: ${{ fromJSON(true) }}
 
     - uses: sigstore/cosign-installer@main
 
