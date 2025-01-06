@@ -35,10 +35,6 @@ inputs:
   pr-comment:
     description: "enable pr-comment"
     default: true
-  tags:
-    description: "CSV list of tags to apply to the image"
-    required: true
-    default: latest
 
 runs:
   using: "composite"
