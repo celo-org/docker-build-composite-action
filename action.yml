@@ -32,9 +32,11 @@ inputs:
   summary:
     description: "enable github summary"
     default: true
+    type: boolean
   pr-comment:
     description: "enable pr-comment"
     default: true
+    type: boolean
 
 runs:
   using: "composite"
