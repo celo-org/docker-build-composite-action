@@ -29,6 +29,16 @@ inputs:
     description: "CSV list of tags to apply to the image"
     required: true
     default: latest
+  summary:
+    description: "enable github summary"
+    default: true
+  pr-comment:
+    description: "enable pr-comment"
+    default: true
+  tags:
+    description: "CSV list of tags to apply to the image"
+    required: true
+    default: latest
 
 runs:
   using: "composite"
@@ -107,6 +117,8 @@ runs:
         exit "$found"
 
     - name: Build and push
+      env:
+        DOCKER_BUILD_SUMMARY: ${{ inputs.summary }}
       if: ${{ inputs.push }} == true
       uses: docker/build-push-action@v6
       id: docker-build-push
@@ -137,3 +149,5 @@ runs:
         image-ref: ${{ steps.process_tags.outputs.first_tag }}
         scan-type: image
         app: Docker
+        pr-comment: ${{ inputs.pr-comment }}
+        summary: ${{ inputs.summary }}
