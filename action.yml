@@ -131,12 +131,14 @@ runs:
         cache-to: type=registry,ref=${{ inputs.registry }}:buildcache,mode=max
         provenance: ${{ fromJSON(false) }}
 
+
     - name: Generate artifact attestation
       uses: actions/attest-build-provenance@v2
       with:
         subject-name: ${{ inputs.registry }}
         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
         push-to-registry: true
+
 
     - uses: anchore/sbom-action@v0
       id: build-sbom
