@@ -141,7 +141,7 @@ runs:
     - uses: anchore/sbom-action@v0
       id: build-sbom
       with:
-        image: ${{ inputs.registry }}
+        image: ${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }}
         output-file: ./sbom.json
      
     - name: Generate SBOM attestation
