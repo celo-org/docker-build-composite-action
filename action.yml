@@ -171,6 +171,5 @@ runs:
       with:
         image-ref: ${{ steps.process_tags.outputs.first_tag }}
         scan-type: image
-        app: Docker
         pr-comment: ${{ inputs.pr-comment }}
         summary: ${{ inputs.summary }}
