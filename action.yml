@@ -143,6 +143,7 @@ runs:
       with:
         image: ${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }}
         output-file: ./sbom.json
+        artifact-name: sbom
      
     - name: Generate SBOM attestation
       uses: actions/attest-sbom@v1
