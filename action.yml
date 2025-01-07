@@ -138,6 +138,21 @@ runs:
         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
         push-to-registry: true
 
+    - uses: anchore/sbom-action@v0
+      id: build-sbom
+      with:
+        image: ${{ steps.docker-build-push.outputs.digest }}
+        artifact-name: "${{ inputs.registry }}-sbom.json"
+     
+    - name: Generate SBOM attestation
+      uses: actions/attest-sbom@v1
+      with:
+        subject-name: ${{ inputs.registry }}
+        subject-digest: ${{ steps.docker-build-push.outputs.digest }}
+        sbom-path: "${{ inputs.registry }}-sbom.json"
+        push-to-registry: true 
+    
+
 #    - uses: sigstore/cosign-installer@main
 #
 #    - name: Sign container image
