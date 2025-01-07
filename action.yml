@@ -144,7 +144,7 @@ runs:
       id: build-sbom
       with:
         image: ${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }}
-        output-file: ./sbom.json
+        output-file: ./sbom.spdx.json
         artifact-name: sbom.spdx.json
      
     - name: Generate SBOM attestation
@@ -152,7 +152,7 @@ runs:
       with:
         subject-name: ${{ inputs.registry }}
         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
-        sbom-path: sbom.json
+        sbom-path: sbom.spdx.json
         push-to-registry: true 
     
 
