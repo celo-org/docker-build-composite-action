@@ -140,7 +140,7 @@ runs:
     - uses: anchore/sbom-action@v0
       id: build-sbom
       with:
-        image: ${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }}2
+        image: ${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }}
         output-file: ./sbom.spdx.json
         artifact-name: sbom.spdx.json
      
