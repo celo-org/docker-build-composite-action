@@ -147,7 +147,7 @@ runs:
     - name: Generate SBOM attestation
       uses: actions/attest-sbom@v1
       with:
-        subject-name: ${{ inputs.registry }}-SBOM
+        subject-name: ${{ inputs.registry }}
         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
         sbom-path: sbom.spdx.json
         push-to-registry: true 
