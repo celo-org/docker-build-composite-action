@@ -133,7 +133,7 @@ runs:
     - name: Generate artifact attestation
       uses: actions/attest-build-provenance@v2
       with:
-        subject-name: ${{ input.registry }}-provenance
+        subject-name: ${{ inputs.registry }}-provenance
         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
         push-to-registry: true
 
@@ -147,7 +147,7 @@ runs:
     - name: Generate SBOM attestation
       uses: actions/attest-sbom@v1
       with:
-        subject-name: ${{ input.registry }}-SBOM
+        subject-name: ${{ inputs.registry }}-SBOM
         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
         sbom-path: sbom.spdx.json
         push-to-registry: true 
