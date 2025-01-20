@@ -133,6 +133,7 @@ runs:
     - name: Generate artifact attestation
       uses: actions/attest-build-provenance@v2
       with:
+        subject-name: ${{ inputs.registry }}
         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
         push-to-registry: true
 
