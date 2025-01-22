@@ -37,6 +37,9 @@ inputs:
     description: "enable pr-comment"
     default: true
     type: boolean
+  trivy-skip-dirs:
+    descriptipn: "skip directories to scan with trivy"
+    type: string
 
 runs:
   using: "composite"
@@ -143,6 +146,7 @@ runs:
         image: ${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }}
         output-file: ./sbom.spdx.json
         artifact-name: sbom.spdx.json
+        dependency-snapshot: true
      
     - name: Generate SBOM attestation
       uses: actions/attest-sbom@v1
@@ -159,3 +163,4 @@ runs:
         scan-type: image
         pr-comment: ${{ inputs.pr-comment }}
         summary: ${{ inputs.summary }}
+        skip-dirs: ${{ inputs.trivy-skip-dirs }}
