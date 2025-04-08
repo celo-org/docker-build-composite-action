@@ -147,7 +147,6 @@ runs:
         cache-to: type=registry,ref=${{ inputs.registry }}:buildcache,mode=max
         provenance: ${{ fromJSON(false) }}
 
-
     - name: Generate artifact attestation
       uses: actions/attest-build-provenance@v2
       with:
@@ -160,7 +159,7 @@ runs:
       with:
         image: ${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }}
         output-file: ./sbom.spdx.json
-        artifact-name: sbom.spdx.json
+        artifact-name: sbom-${{ steps.docker-build-push.outputs.digest }}.spdx.json
         dependency-snapshot: true
      
     - name: Generate SBOM attestation
