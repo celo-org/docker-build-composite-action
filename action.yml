@@ -156,6 +156,7 @@ runs:
 
     - name: Set formatted sha for SBOM name
       id: format-sha
+      shell: bash
       run: |
         RAW_DIGEST="${{ steps.docker-build-push.outputs.digest }}"
         FORMATTED_TAG="${RAW_DIGEST/:/-}"
