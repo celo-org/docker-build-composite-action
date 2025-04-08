@@ -169,7 +169,7 @@ runs:
       with:
         image: ${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }}
         output-file: ./sbom.spdx.json
-        artifact-name: sbom-${{ steps.sbom-artifact-name.outputs.name }}-${{ inputs.tags }}.spdx.json
+        artifact-name: sbom-${{ steps.sbom-artifact-name.outputs.name }}-${{ steps.process_tags.outputs.first_tag }}.spdx.json
         dependency-snapshot: true
      
     - name: Generate SBOM attestation
