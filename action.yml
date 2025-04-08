@@ -181,7 +181,7 @@ runs:
         push-to-registry: true 
     
     - name: Run Trivy vulnerability scanner
-      uses: celo-org/trivy-composite-action@v1.0.1-alvaro
+      uses: celo-org/trivy-composite-action@v1.0.0-alpha
       if: ${{ inputs.trivy-enabled }} == true
       with:
         image-ref: ${{ steps.process_tags.outputs.first_tag }}
