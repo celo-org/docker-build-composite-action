@@ -157,7 +157,7 @@ runs:
     - name: Extract image name from registry for SBOM artifact name
       id: sbom-artifact-name
       env:
-        IMAGE: ${{ inputs.registry }}
+        IMAGE: ${{ steps.process_tags.outputs.first_tag }}
       shell: bash
       run: |
         basename="${IMAGE##*/}"
