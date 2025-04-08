@@ -154,12 +154,19 @@ runs:
         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
         push-to-registry: true
 
+    - name: Set formatted sha for SBOM name
+      id: format-sha
+      run: |
+        RAW_DIGEST="${{ steps.docker-build-push.outputs.digest }}"
+        FORMATTED_TAG="${RAW_DIGEST/:/-}"
+        echo "formatted_sha=$FORMATTED_TAG" >> "$GITHUB_OUTPUT"
+
     - uses: anchore/sbom-action@v0
       id: build-sbom
       with:
         image: ${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }}
         output-file: ./sbom.spdx.json
-        artifact-name: sbom-${{ replace(steps.docker-build-push.outputs.digest, ':', '-') }}.spdx.json
+        artifact-name: sbom-${{ steps.format-sha.outputs.formatted_sha }}.spdx.json
         dependency-snapshot: true
      
     - name: Generate SBOM attestation
