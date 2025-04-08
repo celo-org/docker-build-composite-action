@@ -161,7 +161,7 @@ runs:
       shell: bash
       run: |
         basename="${IMAGE##*/}"
-        stripped_name="${basename%:*}"
+        stripped_name="${basename%:*}-${basename##*:}"
         echo "name=$stripped_name" >> $GITHUB_OUTPUT
 
     - uses: anchore/sbom-action@v0
@@ -169,7 +169,7 @@ runs:
       with:
         image: ${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }}
         output-file: ./sbom.spdx.json
-        artifact-name: sbom-${{ steps.sbom-artifact-name.outputs.name }}-${{ steps.process_tags.outputs.first_tag }}.spdx.json
+        artifact-name: sbom-${{ steps.sbom-artifact-name.outputs.name }}.spdx.json
         dependency-snapshot: true
      
     - name: Generate SBOM attestation
