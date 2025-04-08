@@ -147,7 +147,6 @@ runs:
         cache-to: type=registry,ref=${{ inputs.registry }}:buildcache,mode=max
         provenance: ${{ fromJSON(false) }}
 
-
     - name: Generate artifact attestation
       uses: actions/attest-build-provenance@v2
       with:
@@ -155,12 +154,22 @@ runs:
         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
         push-to-registry: true
 
+    - name: Extract image name from registry for SBOM artifact name
+      id: sbom-artifact-name
+      env:
+        IMAGE: ${{ steps.process_tags.outputs.first_tag }}
+      shell: bash
+      run: |
+        basename="${IMAGE##*/}"
+        stripped_name="${basename%:*}-${basename##*:}"
+        echo "name=$stripped_name" >> $GITHUB_OUTPUT
+
     - uses: anchore/sbom-action@v0
       id: build-sbom
       with:
         image: ${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }}
         output-file: ./sbom.spdx.json
-        artifact-name: sbom.spdx.json
+        artifact-name: sbom-${{ steps.sbom-artifact-name.outputs.name }}.spdx.json
         dependency-snapshot: true
      
     - name: Generate SBOM attestation
@@ -173,7 +182,7 @@ runs:
     
     - name: Run Trivy vulnerability scanner
       uses: celo-org/trivy-composite-action@v1.0.0-alpha
-      if: inputs.trivy-enabled == true
+      if: ${{ inputs.trivy-enabled }} == true
       with:
         image-ref: ${{ steps.process_tags.outputs.first_tag }}
         scan-type: image
