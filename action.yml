@@ -1,5 +1,6 @@
-name: "Build docker image"
-description: "Build a docker image"
+name: "Build Docker Image"
+description: "Build and push a Docker image with enhanced security and configurability."
+
 inputs:
   runner_platform:
     type: string
@@ -75,33 +76,33 @@ runs:
       shell: bash
       run: |
         function process_tags() {
-            local processed_tags=()
+          local processed_tags=()
 
-            # Split tag field on comma character and add project + $REGISTRY + image_name
-            IFS=',' read -ra tags <<< "${TAGS}"
-            for tag in "${tags[@]}"; do
-                case "$tag" in 
-                *:*)
-                    # Tag includes ':' - assume preprocessed and just pass to output
-                    processed_tags+=("$tag")
-                    ;;
-                *)
-                    # Tag needs to include full host + repo definition
-                    processed_tags+=("${REGISTRY}:$tag")
-                    ;;
-                esac
-            done
+          # Split tag field on comma character and add project + $REGISTRY + image_name
+          IFS=',' read -ra tags <<< "${TAGS}"
+          for tag in "${tags[@]}"; do
+            case "$tag" in 
+            *:*)
+              # Tag includes ':' - assume preprocessed and just pass to output
+              processed_tags+=("$tag")
+              ;;
+            *)
+              # Tag needs to include full host + repo definition
+              processed_tags+=("${REGISTRY}:$tag")
+              ;;
+            esac
+          done
 
-            # Format full tags into CSV for docker/build-push-action
-            output_str=$(printf "%s," "${processed_tags[@]}")
+          # Format full tags into CSV for docker/build-push-action
+          output_str=$(printf "%s," "${processed_tags[@]}")
 
-            # Export first processed tag in list for Trivy scan
-            echo "first_tag=${processed_tags[0]}" >> $GITHUB_OUTPUT
-            echo "processed=$output_str" >> $GITHUB_OUTPUT
+          # Export first processed tag in list for Trivy scan
+          echo "first_tag=${processed_tags[0]}" >> $GITHUB_OUTPUT
+          echo "processed=$output_str" >> $GITHUB_OUTPUT
 
-            echo "::debug::processed_tags=${processed_tags[@]}"
-            echo "::debug::output_str=$output_str"
-            echo "::debug::first_tag=${processed_tags[0]}"
+          echo "::debug::processed_tags=${processed_tags[@]}"
+          echo "::debug::output_str=$output_str"
+          echo "::debug::first_tag=${processed_tags[0]}"
         }
         process_tags
 
@@ -119,7 +120,7 @@ runs:
         tags: ${{ steps.process_tags.outputs.processed }}
         load: true
         build-args: ${{ inputs.build-args }}
-          
+
     - name: Scan for OIDC credentials
       shell: bash
       run: |
@@ -173,7 +174,7 @@ runs:
         output-file: ./sbom.spdx.json
         artifact-name: sbom-${{ steps.sbom-artifact-name.outputs.name }}.spdx.json
         dependency-snapshot: true
-          
+
     - name: Generate SBOM attestation
       uses: actions/attest-sbom@v1
       with:
@@ -181,10 +182,10 @@ runs:
         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
         sbom-path: sbom.spdx.json
         push-to-registry: true 
-      
+
     - name: Run Trivy vulnerability scanner
-      uses: celo-org/trivy-composite-action@chatgpt-v3.0.0
       if: ${{ inputs.trivy-enabled == true }}
+      uses: celo-org/trivy-composite-action@chatgpt-v3.0.0
       with:
         image-ref: ${{ steps.process_tags.outputs.first_tag }}
         scan-type: image
