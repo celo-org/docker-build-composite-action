@@ -1,71 +1,84 @@
 name: "Build docker image"
-description: "Build a Docker image, scan for vulnerabilities, and provide outputs for further processing."
-
+description: "Build a docker image"
 inputs:
   runner_platform:
+    type: string
     description: "Platform of the GitHub runner for build testing"
     required: false
     default: linux/amd64
   platforms:
+    type: string
     description: "Image platform(s)"
     required: true
     default: linux/amd64
   context:
+    type: string
     description: "Dockerfile Build context path"
     required: true
   dockerfile:
+    type: string
     description: "Dockerfile path"
     required: true
   push:
-    description: "Push the image to the remote repository. Requires to be pre-authenticated to the registry. Either push or load must be true."
+    type: boolean
+    description: "Push the image to the remote repository. Requires pre-authentication to the registry. Either push or load must be true."
     required: true
-    default: 'true'
+    default: true
   build-args:
+    type: string
     description: "List of build-time variables"
     required: false
   registry:
+    type: string
     description: "Registry to push the image to"
     required: true
   tags:
-    description: "CSV list of tags to apply to the image"
+    type: string
+    description: "Comma-separated list of tags to apply to the image"
     required: true
-    default: latest
-
-outputs:
-  markdown-summary:
-    description: "Path to the markdown summary combining the build and scan results."
-  trivy-vulnerability-report:
-    description: "Path to the Trivy vulnerability report."
-  docker-image-digest:
-    description: "Digest of the built Docker image."
+    default: ""
+  summary:
+    type: boolean
+    description: "Enable GitHub summary"
+    default: true
+  pr-comment:
+    type: boolean
+    description: "Enable PR comment"
+    default: true
+  trivy-enabled:
+    type: boolean
+    description: "Enable Trivy vulnerability scanning"
+    default: true
+  trivy-skip-dirs:
+    type: string
+    description: "Directories to skip during Trivy scan"
+    required: false
+  skip-setup-trivy:
+    type: boolean
+    description: "Skip Trivy setup"
+    default: false
 
 runs:
   using: "composite"
   steps:
-    # Parallel Setup Tasks
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
-      background: true # Run this task in the background
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
-      background: true # Run this task in the background
 
-    # Process Tags
     - name: Conditionally format tags with full image + repo definition
       id: process_tags
       env:
         REGISTRY: ${{ inputs.registry }}
-        RAW_TAGS: ${{ inputs.tags }}
+        TAGS: ${{ inputs.tags }}
       shell: bash
       run: |
         function process_tags() {
-            local registry="${{ env.REGISTRY }}"
-            local raw_tags="${{ env.RAW_TAGS }}"
             local processed_tags=()
 
-            # Split tag field on comma character and add project + registry + image_name 
-            IFS=',' read -ra tags <<< "$raw_tags"
+            # Split tag field on comma character and add project + $REGISTRY + image_name
+            IFS=',' read -ra tags <<< "${TAGS}"
             for tag in "${tags[@]}"; do
                 case "$tag" in 
                 *:*)
@@ -74,7 +87,7 @@ runs:
                     ;;
                 *)
                     # Tag needs to include full host + repo definition
-                    processed_tags+=("${registry}:${tag}")
+                    processed_tags+=("${REGISTRY}:$tag")
                     ;;
                 esac
             done
@@ -90,7 +103,6 @@ runs:
             echo "::debug::output_str=$output_str"
             echo "::debug::first_tag=${processed_tags[0]}"
         }
-
         process_tags
 
     - name: Build container image
@@ -170,37 +182,13 @@ runs:
         sbom-path: sbom.spdx.json
         push-to-registry: true 
       
-    # Run Trivy Vulnerability Scanner
     - name: Run Trivy vulnerability scanner
       uses: celo-org/trivy-composite-action@chatgpt-v3.0.0
-      id: trivy-scan
+      if: ${{ inputs.trivy-enabled == true }}
       with:
         image-ref: ${{ steps.process_tags.outputs.first_tag }}
-      continue-on-error: true # Ensure vulnerabilities don't fail the action
-
-    # Generate Markdown Report
-    - name: Generate Combined Markdown Report
-      id: generate-markdown
-      shell: bash
-      run: |
-        echo "# Build and Trivy Report" > summary.md
-        echo "## Docker Build Summary" >> summary.md
-        echo "**Image Name:** ${{ steps.process_tags.outputs.first_tag }}" >> summary.md
-        echo "**Digest:** ${{ steps.docker-build.outputs.digest }}" >> summary.md
-        echo "" >> summary.md
-        echo "## Trivy Vulnerability Summary" >> summary.md
-        if [[ -f ${{ steps.trivy-scan.outputs.vulnerability-report }} ]]; then
-          cat ${{ steps.trivy-scan.outputs.vulnerability-report }} >> summary.md
-        else
-          echo "No vulnerabilities found or Trivy was skipped." >> summary.md
-        fi
-        echo "markdown=$(pwd)/summary.md" >> $GITHUB_OUTPUT
-
-    # Set Outputs for Workflow
-    - name: Set Outputs
-      run: |
-        echo "markdown-summary=$(pwd)/summary.md" >> $GITHUB_OUTPUT
-        if [[ -f ${{ steps.trivy-scan.outputs.vulnerability-report }} ]]; then
-          echo "trivy-vulnerability-report=${{ steps.trivy-scan.outputs.vulnerability-report }}" >> $GITHUB_OUTPUT
-        fi
-        echo "docker-image-digest=${{ steps.docker-build.outputs.digest }}" >> $GITHUB_OUTPUT
+        scan-type: image
+        pr-comment: ${{ inputs.pr-comment }}
+        summary: ${{ inputs.summary }}
+        skip-dirs: ${{ inputs.trivy-skip-dirs }}
+        skip-setup: ${{ inputs.skip-setup-trivy }}
