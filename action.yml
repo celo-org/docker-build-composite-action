@@ -1,124 +1,208 @@
-name: Trivy
-description: "Run a Trivy Scan and upload the results"
+ name: "Build docker image"
+ description: "Build a docker image"
+ 
+ inputs:
+   runner_platorm:
+     type: string
+     description: "Platform of the github runner for build testing"
+     required: false
+     default: linux/amd64
+   platforms:
+     type: string
+     description: "Image platform(s)"
+     required: true
+     default: linux/amd64
+   context:
+     type: string
+     description: "Dockerfile Build context path"
+     required: true
+   dockerfile:
+     type: string
+     description: "Dockerfile path"
+     required: true
+   push:
+     type: string
+     description: "Push the image to the remote repository. Requires to be pre-authenticated to the registry. Either push or load must be true"
+     required: true
+     default: 'true'
+   build-args:
+     type: string
+     description: "List of build-time variables"
+     required: false
+   registry:
+     type: string
+     description: "Registry to push the image to"
+     required: true
+   tags:
+     type: string
+     description: "CSV list of tags to apply to the image"
+     required: true
+     default: latest
+   summary:
+     type: boolean
+     description: "enable github summary"
+     default: true
+   pr-comment:
+     type: boolean
+     description: "enable pr-comment"
+     default: true
+   trivy-enabled:
+     type: boolean
+     default: true
+   trivy-skip-dirs:
+     description: "Skip directories to scan with Trivy"
+     type: string
+   skip-setup-trivy:
+     type: boolean
+     description: "Skip Trivy setup"
+     default: false
 
-inputs:
-  scan-type:
-    description: "type of scan: image or fs"
-    required: true
-    type: string
-  image-ref:
-    description: "image to scan (required if scan-type is image)"
-    type: string
-  scan-ref:
-    description: "path to scan (required if scan-type is fs)"
-    type: string
-  timeout:
-    default: 15m
-    type: string
-  vuln-type:
-    default: "os,library"
-    type: string
-  severity:
-    default: "UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL"
-    type: string
-  output-file:
-    default: "trivy"
-  summary:
-    default: true
-    type: boolean
-  pr-comment:
-    default: true
-    type: boolean
-  skip-dirs:
-    type: string
-  skip-setup:
-    default: false
-    type: boolean
+ runs:
+   using: "composite"
+   steps:
+     - name: Validate Required Inputs
+       run: |
+         # Ensure required inputs are valid and correct
+         if [[ -z "${{ inputs.registry }}" ]]; then
+           echo "::error::Registry input is required and cannot be empty."
+           exit 1
+         fi
+         if [[ -z "${{ inputs.platforms }}" ]]; then
+           echo "::error::At least one platform must be specified."
+           exit 1
+         fi
 
-runs:
-  using: "composite"
-  steps:
-    - name: Validate Required Inputs
-      shell: bash
-      run: |
-        if [[ "${{ inputs.scan-type }}" == "image" && -z "${{ inputs.image-ref }}" ]]; then
-          echo "::error::scan-type=image requires image-ref"
-          exit 1
-        elif [[ "${{ inputs.scan-type }}" == "fs" && -z "${{ inputs.scan-ref }}" ]]; then
-          echo "::error::scan-type=fs requires scan-ref"
-          exit 1
-        elif [[ "${{ inputs.scan-type }}" != "image" && "${{ inputs.scan-type }}" != "fs" ]]; then
-          echo "::error::scan-type must be either 'image' or 'fs'"
-          exit 1
-        fi
+     - name: Set up QEMU
+       uses: docker/setup-qemu-action@v3
 
-    - name: Run Trivy Scan
-      id: trivy
-      uses: aquasecurity/trivy-action@v0.11.1
-      with:
-        scan-type: ${{ inputs.scan-type }}
-        image-ref: ${{ inputs.image-ref }}
-        scan-ref: ${{ inputs.scan-ref }}
-        timeout: ${{ inputs.timeout }}
-        vuln-type: ${{ inputs.vuln-type }}
-        severity: ${{ inputs.severity }}
-        format: json
-        output: ${{ inputs.output-file }}.json
-        skip-dirs: ${{ inputs.skip-dirs }}
-        skip-setup-trivy: ${{ inputs.skip-setup }}
+     - name: Set up Docker Buildx
+       uses: docker/setup-buildx-action@v3
 
-    - name: Derive Report Name
-      id: report-name
-      env:
-        IMAGE: ${{ inputs.image-ref }}
-        SCAN_REF: ${{ inputs.scan-ref }}
-      shell: bash
-      run: |
-        if [ -n "$IMAGE" ]; then
-          basename="$(basename $IMAGE)"
-          stripped_name="${basename%:*}-${basename##*:}"
-        else 
-          if [ "$SCAN_REF" == "." ]; then
-            SCAN_REF=$(pwd)
-          fi
-          basename="$(basename $SCAN_REF)"
-          random_id=$(openssl rand -hex 6)
-          stripped_name="${basename}-${random_id}"
-        fi
-        echo "name=$stripped_name" >> $GITHUB_OUTPUT
+     - name: Conditionally format tags with full image + repo definition
+       id: process_tags
+       env:
+         REGISTRY: ${{ inputs.registry }}
+         TAGS: ${{ inputs.tags }}
+       shell: bash
+       run: |
+         function process_tags() {
+             local processed_tags=()
 
-    - name: Upload JSON Report
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ steps.report-name.outputs.name }}-${{ inputs.scan-type }}-trivy
-        path: ${{ inputs.output-file }}.json
+             # Split tag field on comma character and add project + ${{ env.REGISTRY }} + image_name 
+             IFS=',' read -ra tags <<< "${{ env.TAGS }}"
+             for tag in "${tags[@]}"; do
+                 case "$tag" in 
+                 *:*)
+                     # Tag includes ':' - assume preprocessed and just pass to output
+                     processed_tags+=("$tag")
+                     ;;
+                 *)
+                     # Tag needs to include full host + repo definition
+                     processed_tags+=("${{ env.REGISTRY }}:$tag")
+                     ;;
+                 esac
+             done
 
-    - name: Check if GHAS is Enabled
-      uses: actions/github-script@v7
-      id: ghas-check
-      with:
-        script: |
-          const [owner, repo] = '${{ github.repository }}'.split("/");
-          const res = await github.rest.repos.get({ owner, repo });
-          const isPrivate = res.data.private;
-          const hasGhas = res.data.security_and_analysis?.advanced_security?.status === 'enabled';
-          if (isPrivate && !hasGhas) {
-            core.warning('GHAS is NOT enabled and repo is private. Cannot upload SARIF.');
-            return false;
-          }
-          return true;
+             # Format full tags into CSV for docker/build-push-action
+             output_str=$(printf "%s," "${processed_tags[@]}")
+             output_str=${output_str%,} # Remove trailing comma
 
-    - name: Convert to SARIF
-      if: fromJSON(steps.ghas-check.outputs.result)
-      id: convert-sarif
-      shell: bash
-      run: |
-        trivy convert --format sarif --output ${{ inputs.output-file }}.sarif ${{ inputs.output-file }}.json
-        echo "sarif=${{ inputs.output-file }}.sarif" >> $GITHUB_OUTPUT
+             # Export first processed tag in list for Trivy scan
+             echo "first_tag=${processed_tags[0]}" >> $GITHUB_OUTPUT
+             echo "processed=$output_str" >> $GITHUB_OUTPUT
 
-    - name: Upload SARIF to Security Tab
-      if: fromJSON(steps.ghas-check.outputs.result)
-      uses: github/codeql-action/upload-sarif@v3
-      with:
-        sarif_file: ${{ steps.convert-sarif.outputs.sarif }}
-        category: ${{ inputs.scan-type }}-${{ inputs.scan-ref != '' && inputs.scan-ref || inputs.image-ref }}
+             echo "::debug::processed_tags=${processed_tags[@]}"
+             echo "::debug::output_str=$output_str"
+             echo "::debug::first_tag=${processed_tags[0]}"
+         }
+         process_tags
+
+     - name: Build container image
+       uses: docker/build-push-action@v6
+       env:
+         DOCKER_BUILD_SUMMARY: false  # Disable summary for this step as it's handled later
+       id: docker-build
+       with:
+         platforms: ${{ inputs.runner_platorm }} # Fixed typo in input name
+         file: ${{ inputs.dockerfile }}
+         context: ${{ inputs.context }}
+         cache-from: type=registry,ref=${{ inputs.registry }}:buildcache
+         cache-to: type=local,dest=cache
+         tags: ${{ steps.process_tags.outputs.processed }}
+         load: true
+         build-args: ${{ inputs.build-args }}
+          
+     - name: Scan for OIDC credentials
+       shell: bash
+       run: |
+         echo "Scanning for OIDC credentials"
+         set +e
+         docker create --name="tmp_container" ${{ steps.docker-build.outputs.imageid }}
+         found=$(docker export tmp_container | tar tf - | grep -e "gha-creds-.*.json" | wc -l)
+         if [ $found -ge 1 ]; then
+             echo -e "::error::Found OIDC credentials\nAdd the following line to your .dockerignore file\ngha-creds-*.json"
+         fi
+         exit "$found"
+
+     - name: Build and push
+       env:
+         DOCKER_BUILD_SUMMARY: ${{ inputs.summary }}
+       if: ${{ inputs.push }} == true
+       uses: docker/build-push-action@v6
+       id: docker-build-push
+       with:
+         platforms: ${{ inputs.platforms }}
+         file: ${{ inputs.dockerfile }}
+         context: ${{ inputs.context }}
+         push: ${{ fromJSON(inputs.push) }}
+         tags: ${{ steps.process_tags.outputs.processed }}
+         build-args: ${{ inputs.build-args }}
+         cache-from: type=local,src=cache
+         cache-to: type=registry,ref=${{ inputs.registry }}:buildcache,mode=max
+         provenance: ${{ fromJSON(false) }}
+         pull: true  # Always pull the latest base image
+
+     - name: Generate artifact attestation
+       uses: actions/attest-build-provenance@v2
+       with:
+         subject-name: ${{ inputs.registry }}
+         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
+         push-to-registry: true
+
+     - name: Extract image name from registry for SBOM artifact name
+       id: sbom-artifact-name
+       env:
+         IMAGE: ${{ steps.process_tags.outputs.first_tag }}
+       shell: bash
+       run: |
+         basename="${IMAGE##*/}"
+         stripped_name="${basename%:*}-${basename##*:}"
+         echo "name=$stripped_name" >> $GITHUB_OUTPUT
+
+     - uses: anchore/sbom-action@v0
+       id: build-sbom
+       with:
+         image: ${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }}
+         output-file: ./sbom.spdx.json
+         artifact-name: sbom-${{ steps.sbom-artifact-name.outputs.name }}.spdx.json
+         dependency-snapshot: true
+         fail-on-error: true  # Ensure SBOM generation fails if there are issues
+      
+     - name: Generate SBOM attestation
+       uses: actions/attest-sbom@v1
+       with:
+         subject-name: ${{ inputs.registry }}
+         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
+         sbom-path: sbom.spdx.json
+         push-to-registry: true 
+    
+     - name: Run Trivy vulnerability scanner
+       uses: celo-org/trivy-composite-action@chatgpt-v3.0.0
+       if: inputs.trivy-enabled == true
+       with:
+         image-ref: ${{ steps.process_tags.outputs.first_tag }}
+         scan-type: image
+         pr-comment: ${{ inputs.pr-comment }}
+         summary: ${{ inputs.summary }}
+         skip-dirs: ${{ inputs.trivy-skip-dirs }}
+         skip-setup: ${{ inputs.skip-setup-trivy }}
