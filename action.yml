@@ -54,11 +54,14 @@ runs:
     # Process Tags
     - name: Conditionally format tags with full image + repo definition
       id: process_tags
+      env:
+        REGISTRY: ${{ inputs.registry }}
+        RAW_TAGS: ${{ inputs.tags }}
       shell: bash
       run: |
         function process_tags() {
-            local registry="${{ inputs.registry }}"
-            local raw_tags="${{ inputs.tags }}"
+            local registry="${{ env.REGISTRY }}"
+            local raw_tags="${{ env.RAW_TAGS }}"
             local processed_tags=()
 
             # Split tag field on comma character and add project + registry + image_name 
@@ -90,9 +93,10 @@ runs:
 
         process_tags
 
-    # Build Container Image
     - name: Build container image
       uses: docker/build-push-action@v6
+      env:
+        DOCKER_BUILD_SUMMARY: false 
       id: docker-build
       with:
         platforms: ${{ inputs.runner_platform }}
@@ -103,10 +107,72 @@ runs:
         tags: ${{ steps.process_tags.outputs.processed }}
         load: true
         build-args: ${{ inputs.build-args }}
+          
+    - name: Scan for OIDC credentials
+      shell: bash
+      run: |
+        echo "Scanning for OIDC credentials"
+        set +e
+        docker create --name="tmp_container" ${{ steps.docker-build.outputs.imageid }}
+        found=$(docker export tmp_container | tar tf - | grep -e "gha-creds-.*.json" | wc -l)
+        if [ $found -ge 1 ]; then
+            echo -e "::error::Found OIDC credentials\nAdd the following line to your .dockerignore file:\ngha-creds-*.json"
+        fi
+        exit "$found"
 
+    - name: Build and push
+      env:
+        DOCKER_BUILD_SUMMARY: ${{ inputs.summary }}
+      if: ${{ inputs.push == true }}
+      uses: docker/build-push-action@v6
+      id: docker-build-push
+      with:
+        platforms: ${{ inputs.platforms }}
+        file: ${{ inputs.dockerfile }}
+        context: ${{ inputs.context }}
+        push: ${{ inputs.push }}
+        tags: ${{ steps.process_tags.outputs.processed }}
+        build-args: ${{ inputs.build-args }}
+        cache-from: type=local,src=cache
+        cache-to: type=registry,ref=${{ inputs.registry }}:buildcache,mode=max
+        provenance: false
+
+    - name: Generate artifact attestation
+      uses: actions/attest-build-provenance@v2
+      with:
+        subject-name: ${{ inputs.registry }}
+        subject-digest: ${{ steps.docker-build-push.outputs.digest }}
+        push-to-registry: true
+
+    - name: Extract image name from registry for SBOM artifact name
+      id: sbom-artifact-name
+      env:
+        IMAGE: ${{ steps.process_tags.outputs.first_tag }}
+      shell: bash
+      run: |
+        basename="${IMAGE##*/}"
+        stripped_name="${basename%:*}-${basename##*:}"
+        echo "name=$stripped_name" >> $GITHUB_OUTPUT
+
+    - uses: anchore/sbom-action@v0
+      id: build-sbom
+      with:
+        image: ${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }}
+        output-file: ./sbom.spdx.json
+        artifact-name: sbom-${{ steps.sbom-artifact-name.outputs.name }}.spdx.json
+        dependency-snapshot: true
+          
+    - name: Generate SBOM attestation
+      uses: actions/attest-sbom@v1
+      with:
+        subject-name: ${{ inputs.registry }}
+        subject-digest: ${{ steps.docker-build-push.outputs.digest }}
+        sbom-path: sbom.spdx.json
+        push-to-registry: true 
+      
     # Run Trivy Vulnerability Scanner
     - name: Run Trivy vulnerability scanner
-      uses: celo-org/trivy-composite-action@v1.0.0-chatgpt
+      uses: celo-org/trivy-composite-action@chatgpt-v3.0.0
       id: trivy-scan
       with:
         image-ref: ${{ steps.process_tags.outputs.first_tag }}
