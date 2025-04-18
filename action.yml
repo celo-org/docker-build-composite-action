@@ -1,5 +1,5 @@
 name: "Build Docker Image"
-description: "Build and push a Docker image with enhanced security and configurability."
+description: "Composite action for building and pushing Docker images with enhanced validation and security."
 
 inputs:
   runner_platform:
@@ -62,6 +62,17 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Validate inputs
+      shell: bash
+      run: |
+        if [ -z "${{ inputs.registry }}" ]; then
+          echo "::error::Input 'registry' is required but not provided."
+          exit 1
+        fi
+        if [ "${{ inputs.trivy-enabled }}" = "true" ] && [ -z "${{ inputs.trivy-skip-dirs }}" ]; then
+          echo "Warning: 'trivy-enabled' is true but 'trivy-skip-dirs' is not set. Defaulting to no skipped directories."
+        fi
+
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
 
@@ -149,39 +160,6 @@ runs:
         cache-from: type=local,src=cache
         cache-to: type=registry,ref=${{ inputs.registry }}:buildcache,mode=max
         provenance: false
-
-    - name: Generate artifact attestation
-      uses: actions/attest-build-provenance@v2
-      with:
-        subject-name: ${{ inputs.registry }}
-        subject-digest: ${{ steps.docker-build-push.outputs.digest }}
-        push-to-registry: true
-
-    - name: Extract image name from registry for SBOM artifact name
-      id: sbom-artifact-name
-      env:
-        IMAGE: ${{ steps.process_tags.outputs.first_tag }}
-      shell: bash
-      run: |
-        basename="${IMAGE##*/}"
-        stripped_name="${basename%:*}-${basename##*:}"
-        echo "name=$stripped_name" >> $GITHUB_OUTPUT
-
-    - uses: anchore/sbom-action@v0
-      id: build-sbom
-      with:
-        image: ${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }}
-        output-file: ./sbom.spdx.json
-        artifact-name: sbom-${{ steps.sbom-artifact-name.outputs.name }}.spdx.json
-        dependency-snapshot: true
-
-    - name: Generate SBOM attestation
-      uses: actions/attest-sbom@v1
-      with:
-        subject-name: ${{ inputs.registry }}
-        subject-digest: ${{ steps.docker-build-push.outputs.digest }}
-        sbom-path: sbom.spdx.json
-        push-to-registry: true 
 
     - name: Run Trivy vulnerability scanner
       if: ${{ inputs.trivy-enabled == true }}
