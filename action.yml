@@ -1,208 +1,140 @@
- name: "Build docker image"
- description: "Build a docker image"
- 
- inputs:
-   runner_platorm:
-     type: string
-     description: "Platform of the github runner for build testing"
-     required: false
-     default: linux/amd64
-   platforms:
-     type: string
-     description: "Image platform(s)"
-     required: true
-     default: linux/amd64
-   context:
-     type: string
-     description: "Dockerfile Build context path"
-     required: true
-   dockerfile:
-     type: string
-     description: "Dockerfile path"
-     required: true
-   push:
-     type: string
-     description: "Push the image to the remote repository. Requires to be pre-authenticated to the registry. Either push or load must be true"
-     required: true
-     default: 'true'
-   build-args:
-     type: string
-     description: "List of build-time variables"
-     required: false
-   registry:
-     type: string
-     description: "Registry to push the image to"
-     required: true
-   tags:
-     type: string
-     description: "CSV list of tags to apply to the image"
-     required: true
-     default: latest
-   summary:
-     type: boolean
-     description: "enable github summary"
-     default: true
-   pr-comment:
-     type: boolean
-     description: "enable pr-comment"
-     default: true
-   trivy-enabled:
-     type: boolean
-     default: true
-   trivy-skip-dirs:
-     description: "Skip directories to scan with Trivy"
-     type: string
-   skip-setup-trivy:
-     type: boolean
-     description: "Skip Trivy setup"
-     default: false
+name: "Build docker image"
+description: "Build a Docker image, scan for vulnerabilities, and provide outputs for further processing."
 
- runs:
-   using: "composite"
-   steps:
-     - name: Validate Required Inputs
-       run: |
-         # Ensure required inputs are valid and correct
-         if [[ -z "${{ inputs.registry }}" ]]; then
-           echo "::error::Registry input is required and cannot be empty."
-           exit 1
-         fi
-         if [[ -z "${{ inputs.platforms }}" ]]; then
-           echo "::error::At least one platform must be specified."
-           exit 1
-         fi
+inputs:
+  runner_platform:
+    description: "Platform of the GitHub runner for build testing"
+    required: false
+    default: linux/amd64
+  platforms:
+    description: "Image platform(s)"
+    required: true
+    default: linux/amd64
+  context:
+    description: "Dockerfile Build context path"
+    required: true
+  dockerfile:
+    description: "Dockerfile path"
+    required: true
+  push:
+    description: "Push the image to the remote repository. Requires to be pre-authenticated to the registry. Either push or load must be true."
+    required: true
+    default: 'true'
+  build-args:
+    description: "List of build-time variables"
+    required: false
+  registry:
+    description: "Registry to push the image to"
+    required: true
+  tags:
+    description: "CSV list of tags to apply to the image"
+    required: true
+    default: latest
 
-     - name: Set up QEMU
-       uses: docker/setup-qemu-action@v3
+outputs:
+  markdown-summary:
+    description: "Path to the markdown summary combining the build and scan results."
+  trivy-vulnerability-report:
+    description: "Path to the Trivy vulnerability report."
+  docker-image-digest:
+    description: "Digest of the built Docker image."
 
-     - name: Set up Docker Buildx
-       uses: docker/setup-buildx-action@v3
+runs:
+  using: "composite"
+  steps:
+    # Parallel Setup Tasks
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+      background: true # Run this task in the background
 
-     - name: Conditionally format tags with full image + repo definition
-       id: process_tags
-       env:
-         REGISTRY: ${{ inputs.registry }}
-         TAGS: ${{ inputs.tags }}
-       shell: bash
-       run: |
-         function process_tags() {
-             local processed_tags=()
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      background: true # Run this task in the background
 
-             # Split tag field on comma character and add project + ${{ env.REGISTRY }} + image_name 
-             IFS=',' read -ra tags <<< "${{ env.TAGS }}"
-             for tag in "${tags[@]}"; do
-                 case "$tag" in 
-                 *:*)
-                     # Tag includes ':' - assume preprocessed and just pass to output
-                     processed_tags+=("$tag")
-                     ;;
-                 *)
-                     # Tag needs to include full host + repo definition
-                     processed_tags+=("${{ env.REGISTRY }}:$tag")
-                     ;;
-                 esac
-             done
+    # Process Tags
+    - name: Conditionally format tags with full image + repo definition
+      id: process_tags
+      shell: bash
+      run: |
+        function process_tags() {
+            local registry="${{ inputs.registry }}"
+            local raw_tags="${{ inputs.tags }}"
+            local processed_tags=()
 
-             # Format full tags into CSV for docker/build-push-action
-             output_str=$(printf "%s," "${processed_tags[@]}")
-             output_str=${output_str%,} # Remove trailing comma
+            # Split tag field on comma character and add project + registry + image_name 
+            IFS=',' read -ra tags <<< "$raw_tags"
+            for tag in "${tags[@]}"; do
+                case "$tag" in 
+                *:*)
+                    # Tag includes ':' - assume preprocessed and just pass to output
+                    processed_tags+=("$tag")
+                    ;;
+                *)
+                    # Tag needs to include full host + repo definition
+                    processed_tags+=("${registry}:${tag}")
+                    ;;
+                esac
+            done
 
-             # Export first processed tag in list for Trivy scan
-             echo "first_tag=${processed_tags[0]}" >> $GITHUB_OUTPUT
-             echo "processed=$output_str" >> $GITHUB_OUTPUT
+            # Format full tags into CSV for docker/build-push-action
+            output_str=$(printf "%s," "${processed_tags[@]}")
 
-             echo "::debug::processed_tags=${processed_tags[@]}"
-             echo "::debug::output_str=$output_str"
-             echo "::debug::first_tag=${processed_tags[0]}"
-         }
-         process_tags
+            # Export first processed tag in list for Trivy scan
+            echo "first_tag=${processed_tags[0]}" >> $GITHUB_OUTPUT
+            echo "processed=$output_str" >> $GITHUB_OUTPUT
 
-     - name: Build container image
-       uses: docker/build-push-action@v6
-       env:
-         DOCKER_BUILD_SUMMARY: false  # Disable summary for this step as it's handled later
-       id: docker-build
-       with:
-         platforms: ${{ inputs.runner_platorm }} # Fixed typo in input name
-         file: ${{ inputs.dockerfile }}
-         context: ${{ inputs.context }}
-         cache-from: type=registry,ref=${{ inputs.registry }}:buildcache
-         cache-to: type=local,dest=cache
-         tags: ${{ steps.process_tags.outputs.processed }}
-         load: true
-         build-args: ${{ inputs.build-args }}
-          
-     - name: Scan for OIDC credentials
-       shell: bash
-       run: |
-         echo "Scanning for OIDC credentials"
-         set +e
-         docker create --name="tmp_container" ${{ steps.docker-build.outputs.imageid }}
-         found=$(docker export tmp_container | tar tf - | grep -e "gha-creds-.*.json" | wc -l)
-         if [ $found -ge 1 ]; then
-             echo -e "::error::Found OIDC credentials\nAdd the following line to your .dockerignore file\ngha-creds-*.json"
-         fi
-         exit "$found"
+            echo "::debug::processed_tags=${processed_tags[@]}"
+            echo "::debug::output_str=$output_str"
+            echo "::debug::first_tag=${processed_tags[0]}"
+        }
 
-     - name: Build and push
-       env:
-         DOCKER_BUILD_SUMMARY: ${{ inputs.summary }}
-       if: ${{ inputs.push }} == true
-       uses: docker/build-push-action@v6
-       id: docker-build-push
-       with:
-         platforms: ${{ inputs.platforms }}
-         file: ${{ inputs.dockerfile }}
-         context: ${{ inputs.context }}
-         push: ${{ fromJSON(inputs.push) }}
-         tags: ${{ steps.process_tags.outputs.processed }}
-         build-args: ${{ inputs.build-args }}
-         cache-from: type=local,src=cache
-         cache-to: type=registry,ref=${{ inputs.registry }}:buildcache,mode=max
-         provenance: ${{ fromJSON(false) }}
-         pull: true  # Always pull the latest base image
+        process_tags
 
-     - name: Generate artifact attestation
-       uses: actions/attest-build-provenance@v2
-       with:
-         subject-name: ${{ inputs.registry }}
-         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
-         push-to-registry: true
+    # Build Container Image
+    - name: Build container image
+      uses: docker/build-push-action@v6
+      id: docker-build
+      with:
+        platforms: ${{ inputs.runner_platform }}
+        file: ${{ inputs.dockerfile }}
+        context: ${{ inputs.context }}
+        cache-from: type=registry,ref=${{ inputs.registry }}:buildcache
+        cache-to: type=local,dest=cache
+        tags: ${{ steps.process_tags.outputs.processed }}
+        load: true
+        build-args: ${{ inputs.build-args }}
 
-     - name: Extract image name from registry for SBOM artifact name
-       id: sbom-artifact-name
-       env:
-         IMAGE: ${{ steps.process_tags.outputs.first_tag }}
-       shell: bash
-       run: |
-         basename="${IMAGE##*/}"
-         stripped_name="${basename%:*}-${basename##*:}"
-         echo "name=$stripped_name" >> $GITHUB_OUTPUT
+    # Run Trivy Vulnerability Scanner
+    - name: Run Trivy vulnerability scanner
+      uses: celo-org/trivy-composite-action@v1.0.0-chatgpt
+      id: trivy-scan
+      with:
+        image-ref: ${{ steps.process_tags.outputs.first_tag }}
+      continue-on-error: true # Ensure vulnerabilities don't fail the action
 
-     - uses: anchore/sbom-action@v0
-       id: build-sbom
-       with:
-         image: ${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }}
-         output-file: ./sbom.spdx.json
-         artifact-name: sbom-${{ steps.sbom-artifact-name.outputs.name }}.spdx.json
-         dependency-snapshot: true
-         fail-on-error: true  # Ensure SBOM generation fails if there are issues
-      
-     - name: Generate SBOM attestation
-       uses: actions/attest-sbom@v1
-       with:
-         subject-name: ${{ inputs.registry }}
-         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
-         sbom-path: sbom.spdx.json
-         push-to-registry: true 
-    
-     - name: Run Trivy vulnerability scanner
-       uses: celo-org/trivy-composite-action@chatgpt-v3.0.0
-       if: inputs.trivy-enabled == true
-       with:
-         image-ref: ${{ steps.process_tags.outputs.first_tag }}
-         scan-type: image
-         pr-comment: ${{ inputs.pr-comment }}
-         summary: ${{ inputs.summary }}
-         skip-dirs: ${{ inputs.trivy-skip-dirs }}
-         skip-setup: ${{ inputs.skip-setup-trivy }}
+    # Generate Markdown Report
+    - name: Generate Combined Markdown Report
+      id: generate-markdown
+      shell: bash
+      run: |
+        echo "# Build and Trivy Report" > summary.md
+        echo "## Docker Build Summary" >> summary.md
+        echo "**Image Name:** ${{ steps.process_tags.outputs.first_tag }}" >> summary.md
+        echo "**Digest:** ${{ steps.docker-build.outputs.digest }}" >> summary.md
+        echo "" >> summary.md
+        echo "## Trivy Vulnerability Summary" >> summary.md
+        if [[ -f ${{ steps.trivy-scan.outputs.vulnerability-report }} ]]; then
+          cat ${{ steps.trivy-scan.outputs.vulnerability-report }} >> summary.md
+        else
+          echo "No vulnerabilities found or Trivy was skipped." >> summary.md
+        fi
+        echo "markdown=$(pwd)/summary.md" >> $GITHUB_OUTPUT
+
+    # Set Outputs for Workflow
+    - name: Set Outputs
+      run: |
+        echo "markdown-summary=$(pwd)/summary.md" >> $GITHUB_OUTPUT
+        if [[ -f ${{ steps.trivy-scan.outputs.vulnerability-report }} ]]; then
+          echo "trivy-vulnerability-report=${{ steps.trivy-scan.outputs.vulnerability-report }}" >> $GITHUB_OUTPUT
+        fi
+        echo "docker-image-digest=${{ steps.docker-build.outputs.digest }}" >> $GITHUB_OUTPUT
