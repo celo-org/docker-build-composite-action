@@ -37,7 +37,7 @@ inputs:
     type: string
     description: "Comma-separated list of tags to apply to the image"
     required: true
-    default: ""
+    default: "latest"
   summary:
     type: boolean
     description: "Enable GitHub summary"
