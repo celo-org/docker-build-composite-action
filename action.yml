@@ -180,13 +180,19 @@ runs:
         sbom-path: sbom.spdx.json
         push-to-registry: true 
     
-    - name: Run Trivy vulnerability scanner
-      uses: celo-org/trivy-composite-action@chatgpt-v3.0.0
-      if: inputs.trivy-enabled == true
+    - name: Run Trivy Scan
+      id: trivy
+      uses: aquasecurity/trivy-action@master
+      env:
+        IMAGE_NAME: ${{ steps.process_tags.outputs.first_tag }}
       with:
-        image-ref: ${{ steps.process_tags.outputs.first_tag }}
         scan-type: image
-        pr-comment: ${{ inputs.pr-comment }}
-        summary: ${{ inputs.summary }}
+        image-ref: ${{ env.IMAGE_NAME }}
         skip-dirs: ${{ inputs.trivy-skip-dirs }}
+
+        timeout: ${{ inputs.timeout }}
+        vuln-type: "os,library"
+        severity: "UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL"
+        format: json
         skip-setup: ${{ inputs.skip-setup-trivy }}
+        output: trivy-${{ env.IMAGE_NAME }}.json
