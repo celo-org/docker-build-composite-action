@@ -190,7 +190,7 @@ runs:
         BASE_IMAGE_NAME: ${{ steps.process_tags.outputs.base_image_name }}
       with:
         scan-type: image
-        image-ref: ${{ env.IMAGE_NAME }}
+        image-ref: ${{ env.FULL_IMAGE_NAME }}
         skip-dirs: ${{ inputs.trivy-skip-dirs }}
         timeout: ${{ inputs.timeout }}
         vuln-type: "os,library"
