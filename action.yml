@@ -93,7 +93,9 @@ runs:
             # format full tags into csv for docker/build-push-action
             output_str=$(printf "%s," "${processed_tags[@]}")
 
+
             # export first processed tag in list for trivy scan
+            echo "image_name=$(basename ${processed_tags[0]})" >> $GITHUB_OUTPUT
             echo "first_tag=${processed_tags[0]}" >> $GITHUB_OUTPUT
             echo "processed=$output_str" >> $GITHUB_OUTPUT
 
@@ -184,12 +186,11 @@ runs:
       id: trivy
       uses: aquasecurity/trivy-action@master
       env:
-        IMAGE_NAME: ${{ steps.process_tags.outputs.first_tag }}
+        IMAGE_NAME: ${{ steps.process_tags.outputs.image_name }}
       with:
         scan-type: image
         image-ref: ${{ env.IMAGE_NAME }}
         skip-dirs: ${{ inputs.trivy-skip-dirs }}
-
         timeout: ${{ inputs.timeout }}
         vuln-type: "os,library"
         severity: "UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL"
