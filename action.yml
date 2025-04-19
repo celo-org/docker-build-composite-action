@@ -95,7 +95,7 @@ runs:
 
 
             # export first processed tag in list for trivy scan
-            echo "image_name=$(basename ${processed_tags[0]})" >> $GITHUB_OUTPUT
+            echo "base_image_name=$(basename ${processed_tags[0]})" >> $GITHUB_OUTPUT
             echo "first_tag=${processed_tags[0]}" >> $GITHUB_OUTPUT
             echo "processed=$output_str" >> $GITHUB_OUTPUT
 
@@ -186,7 +186,8 @@ runs:
       id: trivy
       uses: aquasecurity/trivy-action@master
       env:
-        IMAGE_NAME: ${{ steps.process_tags.outputs.image_name }}
+        FULL_IMAGE_NAME: ${{ steps.process_tags.outputs.first_tag }}
+        BASE_IMAGE_NAME: ${{ steps.process_tags.outputs.base_image_name }}
       with:
         scan-type: image
         image-ref: ${{ env.IMAGE_NAME }}
@@ -195,5 +196,5 @@ runs:
         vuln-type: "os,library"
         severity: "UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL"
         format: json
-        skip-setup: ${{ inputs.skip-setup-trivy }}
-        output: trivy-${{ env.IMAGE_NAME }}.json
+        skip-setup-trivy: ${{ inputs.skip-setup-trivy }}
+        output: trivy-${{ env.BASE_IMAGE_NAME }}-image.json
