@@ -211,8 +211,8 @@ runs:
       if: ${{ inputs.summary || inputs.pr-comment }}
       id: convert-text
       env:
-        text-file: trivy-${{ steps.process_tags.outputs.base_image_name }}-image.txt
-        json-file: trivy-${{ steps.process_tags.outputs.base_image_name }}-image.json
+        text-file: trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image.txt
+        json-file: trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image.json
       shell: bash
       run: |
         trivy convert --format table --output ${{ env.text-file }} ${{ env.json-file }}
