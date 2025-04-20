@@ -202,7 +202,7 @@ runs:
     - name: Upload JSON Report
       uses: actions/upload-artifact@v4
       env:
-          TRIVY_FILE: ${{ steps.process_tags.outputs.base_image_name }}-image-trivy
+          TRIVY_FILE: trivy-${{ steps.process_tags.outputs.base_image_name }}-image.json
       with:
         name: ${{ env.TRIVY_FILE }}
         path: ${{ env.TRIVY_FILE }}
