@@ -202,8 +202,24 @@ runs:
     - name: Upload JSON Report
       uses: actions/upload-artifact@v4
       env:
-          TRIVY_FILE: trivy-${{ steps.process_tags.outputs.base_image_name }}-image.json
+          TRIVY_FILE: trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image.json
       with:
         name: ${{ env.TRIVY_FILE }}
         path: ${{ env.TRIVY_FILE }}
+
+    - name: Convert Report to Text
+      if: ${{ inputs.summary || inputs.pr-comment }}
+      id: convert-text
+      env:
+        text-file: trivy-${{ steps.process_tags.outputs.base_image_name }}-image.txt
+        json-file: trivy-${{ steps.process_tags.outputs.base_image_name }}-image.json
+      shell: bash
+      run: |
+        trivy convert --format table --output ${{ env.text-file }} ${{ env.json-file }}
+        if [ "$(stat -c%s ${{ env.text-file }})" -gt 0 ]; then
+          echo "text=${{ env.text-file }}" >> $GITHUB_OUTPUT
+        else
+          echo "text=" >> $GITHUB_OUTPUT  # Explicitly unset the output
+        fi
+
 
