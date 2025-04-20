@@ -198,3 +198,12 @@ runs:
         format: json
         skip-setup-trivy: ${{ inputs.skip-setup-trivy }}
         output: trivy-${{ env.BASE_IMAGE_NAME }}-image.json
+
+    - name: Upload JSON Report
+      uses: actions/upload-artifact@v4
+      env:
+          TRIVY_FILE: ${{ steps.report-name.outputs.name }}-${{ inputs.scan-type }}-trivy
+      with:
+        name: ${{ env.TRIVY_FILE }}
+        path: ${{ env.TRIVY_FILE }}
+
