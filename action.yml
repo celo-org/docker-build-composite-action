@@ -229,8 +229,8 @@ runs:
       with:
         issue-number: ${{ github.event.pull_request.number }}
         body: |
-        ### Trivy Image Scan Report
-        ${{ trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image }} 
-        ```txt
-        $(cat ${{ steps.convert-text.outputs.text }})
-        ```
+          ### Trivy Image Scan Report
+          ${{ trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image }} 
+          ```txt
+          $(cat ${{ steps.convert-text.outputs.text }})
+          ```
