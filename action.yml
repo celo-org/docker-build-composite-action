@@ -197,7 +197,7 @@ runs:
         severity: "UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL"
         format: json
         skip-setup-trivy: ${{ inputs.skip-setup-trivy }}
-        output: trivy-${{ env.BASE_IMAGE_NAME }}-image.json
+        output: trivy-${{ env.BASE_IMAGE_NAME }}-${{ github.run_id }}-image.json
 
     - name: Upload JSON Report
       uses: actions/upload-artifact@v4
