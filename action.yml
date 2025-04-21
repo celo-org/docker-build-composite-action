@@ -246,8 +246,10 @@ runs:
 
     - name: Set Trivy Text File Output
       if: ${{ steps.convert-trivy.outputs.text != '' }}
+      shell: bash
       run: echo "trivy-text-file=${{ steps.convert-trivy.outputs.text }}" >> $GITHUB_OUTPUT
 
     - name: Set Trivy Sarif File Output
+      shell: bash
       if: ${{ steps.convert-trivy.outputs.sarif != '' }}
       run: echo "trivy-sarif-file=${{ steps.convert-trivy.outputs.sarif }}" >> $GITHUB_OUTPUT
