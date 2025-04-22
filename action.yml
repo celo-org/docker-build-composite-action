@@ -45,6 +45,10 @@ inputs:
     type: boolean
     description: "enable pr-comment"
     default: true
+  trivy-timeout:
+    type: string
+    description: "Trivy timeout"
+    default: 15m
   trivy-enabled:
     type: boolean
     default: true
@@ -207,7 +211,7 @@ runs:
         scan-type: image
         image-ref: ${{ env.FULL_IMAGE_NAME }}
         skip-dirs: ${{ inputs.trivy-skip-dirs }}
-        timeout: ${{ inputs.timeout }}
+        timeout: ${{ inputs.trivy-timeout }}
         vuln-type: "os,library"
         severity: "UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL"
         format: json
