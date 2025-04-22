@@ -61,10 +61,12 @@ inputs:
     default: false
 
 outputs:
-  trivy-text-file:
-    description: "Path to the Trivy scan text file"
-  trivy-sarif-file:
-    description: "Path to the Trivy scan sarif file"
+  app-name:
+    description: "image name without the registry"
+    value: ${{ steps.process_tags.outputs.base_image_name }}
+  full-image-name:
+    description: "image name with registry"
+    value: ${{ steps.process_tags.outputs.first_tag }}
 
 runs:
   using: "composite"
@@ -192,76 +194,77 @@ runs:
         sbom-path: sbom.spdx.json
         push-to-registry: true 
     
-    - name: Create Reports directory
-      id: create_reports_directory
-      shell: bash
-      env:
-        REPORTS_DIR: reports
-      run: |
-            mkdir ${{ env.REPORTS_DIR }}
-
-    - name: Run Trivy Scan
-      id: trivy
-      uses: aquasecurity/trivy-action@master
-      env:
-        FULL_IMAGE_NAME: ${{ steps.process_tags.outputs.first_tag }}
-        BASE_IMAGE_NAME: ${{ steps.process_tags.outputs.base_image_name }}
-      with:
-        scan-type: image
-        image-ref: ${{ env.FULL_IMAGE_NAME }}
-        skip-dirs: ${{ inputs.trivy-skip-dirs }}
-        timeout: ${{ inputs.trivy-timeout }}
-        vuln-type: "os,library"
-        severity: "UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL"
-        format: json
-        skip-setup-trivy: ${{ inputs.skip-setup-trivy }}
-        output: ./reports/trivy-${{ env.BASE_IMAGE_NAME }}-${{ github.run_id }}-image.json
-
-    - name: Upload JSON Report
-      uses: actions/upload-artifact@v4
-      env:
-          TRIVY_FILE: trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image.json
-      with:
-        name: ${{ env.TRIVY_FILE }}
-        path: reports/${{ env.TRIVY_FILE }}
-
-    - name: Convert Report to Text and sarif
-      if: ${{ inputs.summary || inputs.pr-comment }}
-      id: convert-trivy
-      env:
-        text-file: trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image.txt
-        json-file: trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image.json
-        sarif-file: trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image.sarif
-      shell: bash
-      run: |
-        trivy convert --format table --output ./reports/${{ env.text-file }} ./reports/${{ env.json-file }}
-        trivy convert --format table --output ./reports/${{ env.sarif-file }} ./reports/${{ env.json-file }}
-        if [ "$(stat -c%s ./reports/${{ env.text-file }})" -gt 0 ]; then
-          echo "text=./reports/${{ env.text-file }}" >> $GITHUB_OUTPUT
-          echo "sarif=./reports/${{ env.sarif-file }}" >> $GITHUB_OUTPUT
-        else
-          echo "text=" >> $GITHUB_OUTPUT  # Explicitly unset the output
-          echo "sarif=" >> $GITHUB_OUTPUT  # Explicitly unset the output
-        fi
-
-    - name: Post PR Comment with Trivy Report
-      if: ${{ inputs.pr-comment && steps.convert-trivy.outputs.text != '' }}
-      uses: peter-evans/create-or-update-comment@v3
-      with:
-        issue-number: ${{ github.event.pull_request.number }}
-        body: |
-          ### Trivy Image Scan Report
-          trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image
-          ```txt
-          $(cat ${{ steps.convert-trivy.outputs.text }})
-          ```
-
-    - name: Set Trivy Text File Output
-      if: ${{ steps.convert-trivy.outputs.text != '' }}
-      shell: bash
-      run: echo "trivy-text-file=${{ steps.convert-trivy.outputs.text }}" >> $GITHUB_OUTPUT
-
-    - name: Set Trivy Sarif File Output
-      shell: bash
-      if: ${{ steps.convert-trivy.outputs.sarif != '' }}
-      run: echo "trivy-sarif-file=${{ steps.convert-trivy.outputs.sarif }}" >> $GITHUB_OUTPUT
+#    - name: Create Reports directory
+#      id: create_reports_directory
+#      shell: bash
+#      env:
+#        REPORTS_DIR: reports
+#      run: |
+#            mkdir ${{ env.REPORTS_DIR }}
+#
+#    - name: Run Trivy Scan
+#      id: trivy
+#      uses: aquasecurity/trivy-action@master
+#      env:
+#        FULL_IMAGE_NAME: ${{ steps.process_tags.outputs.first_tag }}
+#        BASE_IMAGE_NAME: ${{ steps.process_tags.outputs.base_image_name }}
+#      with:
+#        scan-type: image
+#        image-ref: ${{ env.FULL_IMAGE_NAME }}
+#        skip-dirs: ${{ inputs.trivy-skip-dirs }}
+#        timeout: ${{ inputs.trivy-timeout }}
+#        vuln-type: "os,library"
+#        severity: "UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL"
+#        format: json
+#        skip-setup-trivy: ${{ inputs.skip-setup-trivy }}
+#        output: ./reports/trivy-${{ env.BASE_IMAGE_NAME }}-${{ github.run_id }}-image.json
+#
+#    - name: Upload JSON Report
+#      uses: actions/upload-artifact@v4
+#      env:
+#          TRIVY_FILE: trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image.json
+#      with:
+#        name: ${{ env.TRIVY_FILE }}
+#        path: reports/${{ env.TRIVY_FILE }}
+#
+#    - name: Convert Report to Text and sarif
+#      if: ${{ inputs.summary || inputs.pr-comment }}
+#      id: convert-trivy
+#      env:
+#        text-file: trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image.txt
+#        json-file: trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image.json
+#        sarif-file: trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image.sarif
+#      shell: bash
+#      run: |
+#        trivy convert --format table --output ./reports/${{ env.text-file }} ./reports/${{ env.json-file }}
+#        trivy convert --format table --output ./reports/${{ env.sarif-file }} ./reports/${{ env.json-file }}
+#        if [ "$(stat -c%s ./reports/${{ env.text-file }})" -gt 0 ]; then
+#          echo "text=./reports/${{ env.text-file }}" >> $GITHUB_OUTPUT
+#          echo "sarif=./reports/${{ env.sarif-file }}" >> $GITHUB_OUTPUT
+#        else
+#          echo "text=" >> $GITHUB_OUTPUT  # Explicitly unset the output
+#          echo "sarif=" >> $GITHUB_OUTPUT  # Explicitly unset the output
+#        fi
+#
+#    - name: Post PR Comment with Trivy Report
+#      if: ${{ inputs.pr-comment && steps.convert-trivy.outputs.text != '' }}
+#      uses: peter-evans/create-or-update-comment@v3
+#      with:
+#        issue-number: ${{ github.event.pull_request.number }}
+#        body: |
+#          ### Trivy Image Scan Report
+#          trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image
+#          ```txt
+#          $(cat ${{ steps.convert-trivy.outputs.text }})
+#          ```
+#
+#    - name: Set Trivy Text File Output
+#      if: ${{ steps.convert-trivy.outputs.text != '' }}
+#      shell: bash
+#      run: echo "trivy-text-file=${{ steps.convert-trivy.outputs.text }}" >> $GITHUB_OUTPUT
+#
+#    - name: Set Trivy Sarif File Output
+#      shell: bash
+#      if: ${{ steps.convert-trivy.outputs.sarif != '' }}
+#      run: echo "trivy-sarif-file=${{ steps.convert-trivy.outputs.sarif }}" >> $GITHUB_OUTPUT
+#
