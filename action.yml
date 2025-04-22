@@ -218,9 +218,11 @@ runs:
       uses: actions/upload-artifact@v4
       env:
           TRIVY_FILE: trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image.json
+          reports-dir: ${{ steps.create_reports_directory.dir }}
+
       with:
         name: ${{ env.TRIVY_FILE }}
-        path: ${{ env.TRIVY_FILE }}
+        path: ${{ env.reports-dir }}/${{ env.TRIVY_FILE }}
 
     - name: Convert Report to Text and sarif
       if: ${{ inputs.summary || inputs.pr-comment }}
