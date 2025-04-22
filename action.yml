@@ -196,8 +196,6 @@ runs:
       run: |
             mkdir ${{ env.REPORTS_DIR }}
             echo "dir=${{ env.REPORTS_DIR }}" >> $GITHUB_OUTPUT
-        }
-        process_tags
 
     - name: Run Trivy Scan
       id: trivy
