@@ -188,6 +188,17 @@ runs:
         sbom-path: sbom.spdx.json
         push-to-registry: true 
     
+    - name: Create Reports directory
+      id: create_reports_directory
+      shell: bash
+      env:
+        REPORTS_DIR: reports
+      run: |
+            mkdir ${{ env.REPORTS_DIR }}
+            echo "dir=${{ env.REPORTS_DIR }}" >> $GITHUB_OUTPUT
+        }
+        process_tags
+
     - name: Run Trivy Scan
       id: trivy
       uses: aquasecurity/trivy-action@master
@@ -220,13 +231,14 @@ runs:
         text-file: trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image.txt
         json-file: trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image.json
         sarif-file: trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image.sarif
+	reports-dir "${{ steps.create_reports_directory.dir }}
       shell: bash
       run: |
         trivy convert --format table --output ./reports/${{ env.text-file }} ./reports/${{ env.json-file }}
         trivy convert --format table --output ./reports/${{ env.sarif-file }} ./reports/${{ env.json-file }}
         if [ "$(stat -c%s ${{ env.text-file }})" -gt 0 ]; then
-          echo "text=./reports/${{ env.text-file }}" >> $GITHUB_OUTPUT
-          echo "sarif=./reports/${{ env.sarif-file }}" >> $GITHUB_OUTPUT
+          echo "text=./${{ env.reports-dir }}/${{ env.text-file }}" >> $GITHUB_OUTPUT
+          echo "sarif=./${{ env.reports-dir }}/${{ env.sarif-file }}" >> $GITHUB_OUTPUT
         else
           echo "text=" >> $GITHUB_OUTPUT  # Explicitly unset the output
           echo "sarif=" >> $GITHUB_OUTPUT  # Explicitly unset the output
