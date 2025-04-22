@@ -229,7 +229,7 @@ runs:
         text-file: trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image.txt
         json-file: trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image.json
         sarif-file: "trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image.sarif"
-	reports-dir "${{ steps.create_reports_directory.dir }}"
+        reports-dir "${{ steps.create_reports_directory.dir }}"
       shell: bash
       run: |
         trivy convert --format table --output ./reports/${{ env.text-file }} ./reports/${{ env.json-file }}
