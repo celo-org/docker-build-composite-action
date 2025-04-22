@@ -207,6 +207,7 @@ runs:
       env:
         FULL_IMAGE_NAME: ${{ steps.process_tags.outputs.first_tag }}
         BASE_IMAGE_NAME: ${{ steps.process_tags.outputs.base_image_name }}
+        reports-dir: ${{ steps.create_reports_directory.outputs.dir }}
       with:
         scan-type: image
         image-ref: ${{ env.FULL_IMAGE_NAME }}
@@ -216,14 +217,13 @@ runs:
         severity: "UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL"
         format: json
         skip-setup-trivy: ${{ inputs.skip-setup-trivy }}
-        output: ./reports/trivy-${{ env.BASE_IMAGE_NAME }}-${{ github.run_id }}-image.json
+        output: ./${{ env.reports-dir }}/trivy-${{ env.BASE_IMAGE_NAME }}-${{ github.run_id }}-image.json
 
     - name: Upload JSON Report
       uses: actions/upload-artifact@v4
       env:
           TRIVY_FILE: trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image.json
-          reports-dir: ${{ steps.create_reports_directory.dir }}
-
+          reports-dir: ${{ steps.create_reports_directory.outputs.dir }}
       with:
         name: ${{ env.TRIVY_FILE }}
         path: ${{ env.reports-dir }}/${{ env.TRIVY_FILE }}
@@ -235,7 +235,7 @@ runs:
         text-file: trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image.txt
         json-file: trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image.json
         sarif-file: trivy-${{ steps.process_tags.outputs.base_image_name }}-${{ github.run_id }}-image.sarif
-        reports-dir: ${{ steps.create_reports_directory.dir }}
+        reports-dir: ${{ steps.create_reports_directory.outputs.dir }}
       shell: bash
       run: |
         trivy convert --format table --output ./reports/${{ env.text-file }} ./reports/${{ env.json-file }}
