@@ -236,7 +236,7 @@ runs:
       run: |
         trivy convert --format table --output ./reports/${{ env.text-file }} ./reports/${{ env.json-file }}
         trivy convert --format table --output ./reports/${{ env.sarif-file }} ./reports/${{ env.json-file }}
-        if [ "$(stat -c%s ${{ env.text-file }})" -gt 0 ]; then
+        if [ "$(stat -c%s ./reports/${{ env.text-file }})" -gt 0 ]; then
           echo "text=./reports/${{ env.text-file }}" >> $GITHUB_OUTPUT
           echo "sarif=./reports/${{ env.sarif-file }}" >> $GITHUB_OUTPUT
         else
