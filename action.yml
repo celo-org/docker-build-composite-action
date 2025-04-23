@@ -1,73 +1,109 @@
-name: "Build docker image"
-description: "Build a docker image"
+name: "Build and Push Docker Image Using Composite Action"
+description: >
+  This composite action builds a Docker image from a specified Dockerfile and optionally pushes it to a remote registry.
+  It supports multi-platform builds, caching, and includes optional tools like Trivy for vulnerability scanning.
+
 inputs:
-  runner_platorm:
+  runner_platform:
     type: string
-    description: "Platform of the github runner for build testing"
+    description: >
+      Specifies the platform of the GitHub runner for build testing. Commonly used to test builds on various architectures.
+      Default is `linux/amd64`.
     required: false
     default: linux/amd64
+
   platforms:
     type: string
-    description: "Image platform(s)"
+    description: >
+      Comma-separated list of image platforms to target during the build process (e.g., `linux/amd64,linux/arm64`).
     required: true
     default: linux/amd64
+
   context:
     type: string
-    description: "Dockerfile Build context path"
+    description: >
+      The build context path for Docker. Typically, this is the directory where the Dockerfile and associated files are located.
     required: true
+
   dockerfile:
     type: string
-    description: "Dockerfile path"
+    description: >
+      The path to the Dockerfile to use for building the image. This should be relative to the context path.
     required: true
+
   push:
     type: string
-    description: "Push the image to the remote repository. Requires to be pre-authenticated to the registry. Either push or load must be true"
+    description: >
+      Indicates whether the image should be pushed to the remote registry. Requires prior authentication to the registry.
+      Either `push` or `load` must be set to `true`.
     required: true
     default: 'true'
+
   build-args:
     type: string
-    description: "List of build-time variables"
+    description: >
+      A list of build-time variables to pass to the Docker build process. Use a comma-separated format.
     required: false
+
   registry:
     type: string
-    description: "Registry to push the image to"
+    description: >
+      The registry to which the image will be pushed (e.g., `docker.io/my-repo` or `ghcr.io/my-org`).
     required: true
+
   tags:
     type: string
-    description: "CSV list of tags to apply to the image"
+    description: >
+      A comma-separated list of tags to apply to the image. For example, `latest,v1.0,v1.0.0`.
     required: true
     default: latest
+
   summary:
     type: boolean
-    description: "enable github summary"
+    description: >
+      Enables the generation of a GitHub Action summary for the build process.
     default: true
+
   pr-comment:
     type: boolean
-    description: "enable pr-comment"
+    description: >
+      Enables posting comments on pull requests with details about the build process and results.
     default: true
+
   trivy-timeout:
     type: string
-    description: "Trivy timeout"
+    description: >
+      The timeout value for Trivy vulnerability scanning. Specify in a duration format (e.g., `15m` for 15 minutes).
     default: 15m
+
   trivy-enabled:
     type: boolean
+    description: >
+      Indicates whether Trivy vulnerability scanning is enabled.
     default: true
+
   trivy-skip-dirs:
-    descriptipn: "skip directories to scan with trivy"
     type: string
+    description: >
+      Comma-separated list of directories to skip during Trivy vulnerability scanning.
+    required: false
+
   skip-setup-trivy:
     type: boolean
-    descriptipn: "skip trivy setup"
+    description: >
+      Indicates whether the setup process for Trivy should be skipped.
     default: false
 
 outputs:
   app-name:
-    description: "image name without the registry"
+    description: >
+      The name of the Docker image without the registry. Useful for identifying the application name.
     value: ${{ steps.process_tags.outputs.base_image_name }}
-  full-image-name:
-    description: "image name with registry"
-    value: ${{ steps.process_tags.outputs.first_tag }}
 
+  full-image-name:
+    description: >
+      The full name of the Docker image, including the registry. This is useful for pulling or referencing the image.
+    value: ${{ steps.process_tags.outputs.first_tag }}
 runs:
   using: "composite"
   steps:
