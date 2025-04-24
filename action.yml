@@ -235,4 +235,4 @@ runs:
     - name: Add commands to summary
       shell: bash
       run: |
-        
+       echo 'gh attestation verify --repo ${{ github.repository }} --signer-repo $GITHUB_REPOSITORY  oci://us-west1-docker.pkg.dev/devopsre/dev-images/akeyless-action@sha256:8f0fc2200a2e60969d36b4969d7adedc288c233d665d9839b4af1a81907017da --format json | jq'
