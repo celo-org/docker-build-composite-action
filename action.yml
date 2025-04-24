@@ -211,8 +211,7 @@ runs:
       id: attestation
       uses: actions/attest-build-provenance@v2
       with:
-        subject-name: ${{ github.repository }}
-#        subject-name: ${{ inputs.registry }}
+        subject-name: ${{ inputs.registry }}
         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
         push-to-registry: true
 
