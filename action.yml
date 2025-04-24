@@ -211,7 +211,8 @@ runs:
       id: attestation
       uses: actions/attest-build-provenance@v2
       with:
-        subject-name: ${{ inputs.registry }}
+        subject-name: ${{ github.repository }}
+#        subject-name: ${{ inputs.registry }}
         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
         push-to-registry: true
 
@@ -230,3 +231,9 @@ runs:
         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
         sbom-path: sbom.spdx.json
         push-to-registry: true 
+
+
+    - name: Add commands to summary
+      shell: bash
+      run: |
+        
