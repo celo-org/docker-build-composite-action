@@ -4,7 +4,7 @@ description: >
   It supports multi-platform builds, caching, and includes optional tools like Trivy for vulnerability scanning.
 
 inputs:
-  runner_platform:
+  runner-platform:
     type: string
     description: >
       Specifies the platform of the GitHub runner for build testing. Commonly used to test builds on various architectures.
@@ -159,7 +159,7 @@ runs:
         DOCKER_BUILD_SUMMARY: false 
       id: docker-build
       with:
-        platforms: ${{ inputs.runner_platform }}
+        platforms: ${{ inputs.runner-platform }}
         file: ${{ inputs.dockerfile }}
         context: ${{ inputs.context }}
         cache-from: type=registry,ref=${{ inputs.registry }}:buildcache
