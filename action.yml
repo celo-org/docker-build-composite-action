@@ -232,15 +232,34 @@ runs:
         push-to-registry: true 
 
 
+#    - name: Add commands to summary
+#      shell: bash
+#      run: |
+#        echo "### Attestion Verification" >> $GITHUB_STEP_SUMMARY
+#        echo "- Verify Provenance" >> $GITHUB_STEP_SUMMARY
+#        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+#        echo "gh attestation verify --repo ${{ github.repository }} --signer-repo celo-org/reusable-workflows  oci://${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }} --format json | jq"
+#        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY  
+#        echo "- Verify SBOM" >> $GITHUB_STEP_SUMMARY
+#        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+#        echo "gh attestation verify --repo ${{ github.repository }} --signer-repo celo-org/reusable-workflows  oci://${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }} --predicate-type https://spdx.dev/Document/v2.3 --format json | jq"
+#        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY  
+#
     - name: Add commands to summary
       shell: bash
+      env:
+        REGISTRY: "oci://${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }}"
       run: |
-        echo "### Attestion Verification" >> $GITHUB_STEP_SUMMARY
+        # Set environment variables to resolve expressions first
+        # Write Provenance Verification to Summary
+        echo "### Attestation Verification" >> $GITHUB_STEP_SUMMARY
         echo "- Verify Provenance" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-        echo "gh attestation verify --repo ${{ github.repository }} --signer-repo celo-org/reusable-workflows  oci://${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }} --format json | jq"
-        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY  
+        echo "gh attestation verify --repo ${{ github.repository }} --signer-repo celo-org/reusable-workflows $REGISTRY --format json | jq" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+        # Write SBOM Verification to Summary
         echo "- Verify SBOM" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-        echo "gh attestation verify --repo ${{ github.repository }} --signer-repo celo-org/reusable-workflows  oci://${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }} --predicate-type https://spdx.dev/Document/v2.3 --format json | jq"
-        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY  
+        echo "gh attestation verify --repo ${{ github.repository }} --signer-repo celo-org/reusable-workflows $REGISTRY --predicate-type https://spdx.dev/Document/v2.3 --format json | jq" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
