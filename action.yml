@@ -235,4 +235,12 @@ runs:
     - name: Add commands to summary
       shell: bash
       run: |
-       echo "gh attestation verify --repo ${{ github.repository }} --signer-repo celo-org/reusable-workflows  oci://${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }} --format json | jq"
+        echo "### Attestion Verification" >> $GITHUB_STEP_SUMMARY
+        echo "- Verify Provenance" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "gh attestation verify --repo ${{ github.repository }} --signer-repo celo-org/reusable-workflows  oci://${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }} --format json | jq"
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY  
+        echo "- Verify SBOM" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "gh attestation verify --repo ${{ github.repository }} --signer-repo celo-org/reusable-workflows  oci://${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }} --predicate-type https://spdx.dev/Document/v2.3 --format json | jq"
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY  
