@@ -235,4 +235,4 @@ runs:
     - name: Add commands to summary
       shell: bash
       run: |
-       echo "gh attestation verify --repo ${{ github.repository }} --signer-repo celo-org/reusable-workflows  oci://${{ inputs.registry }}@${{ inputs.subject-digest }} --format json | jq"
+       echo "gh attestation verify --repo ${{ github.repository }} --signer-repo celo-org/reusable-workflows  oci://${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }} --format json | jq"
