@@ -197,7 +197,7 @@ runs:
         cache-to: type=registry,ref=${{ inputs.registry }}:buildcache,mode=max
         provenance: ${{ fromJSON(false) }}
 
-    - name: Extract image name from registry for attestation artifact names
+    - name: Extract image name from registry for the SBOM attestation artifact name
       id: attestation-artifact-name
       env:
         IMAGE: ${{ steps.process_tags.outputs.first_tag }}
@@ -214,12 +214,6 @@ runs:
         subject-name: ${{ inputs.registry }}
         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
         push-to-registry: true
-
-    - name: Upload Attestation Report
-      uses: actions/upload-artifact@v4
-      with:
-        name: attestation-${{ steps.attestation-artifact-name.outputs.name }}.spdx.json
-        path: ${{ steps.attestation.outputs.bundle-path  }}
 
     - uses: anchore/sbom-action@v0
       id: build-sbom
