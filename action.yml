@@ -1,39 +1,88 @@
-name: "Build docker image"
-description: "Build a docker image"
+name: "Build and Push Docker Image Using Composite Action"
+description: >
+  This composite action builds a Docker image from a specified Dockerfile and optionally pushes it to a remote registry.
+  It supports multi-platform builds, caching, and includes optional tools like Trivy for vulnerability scanning.
+
 inputs:
-  runner_platorm:
-    description: "Platform of the github runner for build testing"
+  runner-platform:
+    type: string
+    description: >
+      Specifies the platform of the GitHub runner for build testing. Commonly used to test builds on various architectures.
+      Default is `linux/amd64`.
     required: false
     default: linux/amd64
+
   platforms:
-    description: "Image platform(s)"
+    type: string
+    description: >
+      Comma-separated list of image platforms to target during the build process (e.g., `linux/amd64,linux/arm64`).
     required: true
     default: linux/amd64
+
   context:
-    description: "Dockerfile Build context path"
+    type: string
+    description: >
+      The build context path for Docker. Typically, this is the directory where the Dockerfile and associated files are located.
     required: true
+
   dockerfile:
-    description: "Dockerfile path"
+    type: string
+    description: >
+      The path to the Dockerfile to use for building the image. This should be relative to the context path.
     required: true
+
   push:
-    description: "Push the image to the remote repository. Requires to be pre-authenticated to the registry. Either push or load must be true"
+    type: string
+    description: >
+      Indicates whether the image should be pushed to the remote registry. Requires prior authentication to the registry.
+      Either `push` or `load` must be set to `true`.
     required: true
     default: 'true'
+
   build-args:
-    description: "List of build-time variables"
+    type: string
+    description: >
+      A list of build-time variables to pass to the Docker build process. Use a comma-separated format.
     required: false
+
   registry:
-    description: "Registry to push the image to"
+    type: string
+    description: >
+      The registry to which the image will be pushed (e.g., `docker.io/my-repo` or `ghcr.io/my-org`).
     required: true
+
   tags:
-    description: "CSV list of tags to apply to the image"
+    type: string
+    description: >
+      A comma-separated list of tags to apply to the image. For example, `latest,v1.0,v1.0.0`.
     required: true
     default: latest
 
+  summary:
+    type: boolean
+    description: >
+      Enables the generation of a GitHub Action summary for the build process.
+    default: true
+
+  pr-comment:
+    type: boolean
+    description: >
+      Enables posting comments on pull requests with details about the build process and results.
+    default: true
+
+outputs:
+  app-name:
+    description: >
+      The name of the Docker image without the registry. Useful for identifying the application name.
+    value: ${{ steps.process_tags.outputs.base_image_name }}
+
+  full-image-name:
+    description: >
+      The full name of the Docker image, including the registry. This is useful for pulling or referencing the image.
+    value: ${{ steps.process_tags.outputs.first_tag }}
 runs:
   using: "composite"
   steps:
-
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
 
@@ -42,15 +91,16 @@ runs:
 
     - name: Conditionally format tags with full image + repo definition
       id: process_tags
+      env:
+        REGISTRY: ${{ inputs.registry }}
+        TAGS: ${{ inputs.tags }}
       shell: bash
       run: |
         function process_tags() {
-            local registry="${{ inputs.registry }}"
-            local raw_tags="${{ inputs.tags }}"
             local processed_tags=()
 
-            # split tag field on comma character and add project + registry + image_name 
-            IFS=',' read -ra tags <<< "$raw_tags"
+            # split tag field on comma character and add project + ${{ env.REGISTRY }} + image_name 
+            IFS=',' read -ra tags <<< "${{ env.TAGS }}"
             for tag in "${tags[@]}"; do
                 case "$tag" in 
                 *:*)
@@ -59,7 +109,7 @@ runs:
                     ;;
                 *)
                     # tag needs to include full host + repo definition
-                    processed_tags+=("$registry:$tag")
+                    processed_tags+=("${{env.REGISTRY }}:$tag")
                     ;;
                 esac
             done
@@ -67,7 +117,9 @@ runs:
             # format full tags into csv for docker/build-push-action
             output_str=$(printf "%s," "${processed_tags[@]}")
 
+
             # export first processed tag in list for trivy scan
+            echo "base_image_name=$(basename ${{env.REGISTRY}})" >> $GITHUB_OUTPUT
             echo "first_tag=${processed_tags[0]}" >> $GITHUB_OUTPUT
             echo "processed=$output_str" >> $GITHUB_OUTPUT
 
@@ -75,14 +127,15 @@ runs:
             echo "::debug::output_str=$output_str"
             echo "::debug::first_tag=${processed_tags[0]}"
         }
-
         process_tags
 
     - name: Build container image
       uses: docker/build-push-action@v6
+      env:
+        DOCKER_BUILD_SUMMARY: false 
       id: docker-build
       with:
-        platforms: ${{ inputs.runner_platform }}
+        platforms: ${{ inputs.runner-platform }}
         file: ${{ inputs.dockerfile }}
         context: ${{ inputs.context }}
         cache-from: type=registry,ref=${{ inputs.registry }}:buildcache
@@ -90,23 +143,23 @@ runs:
         tags: ${{ steps.process_tags.outputs.processed }}
         load: true
         build-args: ${{ inputs.build-args }}
-
+         
     - name: Scan for OIDC credentials
       shell: bash
       run: |
-        echo ":Scanning for oidc credentials"
+        echo "Scanning for oidc credentials"
         set +e
         docker create --name="tmp_container" ${{ steps.docker-build.outputs.imageid }}
         found=$(docker export tmp_container | tar tf - | grep -e "gha-creds-.*.json" | wc -l)
         if [ $found -ge 1 ]; then
-            echo "::error::Found oidc credentials"
-            echo "::notice::Add the following line to your .dockerignore file"
-            echo "::notice::gha-creds-*.json"
+            echo -e "::error::Found oidc credentials\nAdd the following line to your .dockerignore file\ngha-creds-*.json"
         fi
         exit "$found"
 
     - name: Build and push
-      if: ${{ inputs.push }} == 'true'
+      env:
+        DOCKER_BUILD_SUMMARY: ${{ inputs.summary }}
+      if: ${{ inputs.push }} == true
       uses: docker/build-push-action@v6
       id: docker-build-push
       with:
@@ -118,19 +171,56 @@ runs:
         build-args: ${{ inputs.build-args }}
         cache-from: type=local,src=cache
         cache-to: type=registry,ref=${{ inputs.registry }}:buildcache,mode=max
-        provenance: ${{ fromJSON(true) }}
+        provenance: ${{ fromJSON(false) }}
 
-    - uses: sigstore/cosign-installer@main
-
-    - name: Sign container image
+    - name: Extract image name from registry for the SBOM attestation artifact name
+      id: attestation-artifact-name
       env:
-        COSIGN_EXPERIMENTAL: "true"
+        IMAGE: ${{ steps.process_tags.outputs.first_tag }}
       shell: bash
       run: |
-        cosign sign --yes ${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }}
+        basename="${IMAGE##*/}"
+        stripped_name="${basename%:*}-${basename##*:}"
+        echo "name=$stripped_name" >> $GITHUB_OUTPUT
 
-    - name: Run Trivy vulnerability scanner
-      continue-on-error: true
-      uses: celo-org/trivy-composite-action@v1.0.1
+    - name: Generate artifact attestation
+      id: attestation
+      uses: actions/attest-build-provenance@v2
       with:
-        image-ref: ${{ steps.process_tags.outputs.first_tag }}
+        subject-name: ${{ inputs.registry }}
+        subject-digest: ${{ steps.docker-build-push.outputs.digest }}
+        push-to-registry: true
+
+    - uses: anchore/sbom-action@v0
+      id: build-sbom
+      with:
+        image: ${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }}
+        output-file: ./sbom.spdx.json
+        artifact-name: sbom-${{ steps.attestation-artifact-name.outputs.name }}.spdx.json
+        dependency-snapshot: true
+     
+    - name: Generate SBOM attestation
+      uses: actions/attest-sbom@v1
+      with:
+        subject-name: ${{ inputs.registry }}
+        subject-digest: ${{ steps.docker-build-push.outputs.digest }}
+        sbom-path: sbom.spdx.json
+        push-to-registry: true 
+
+    - name: Add commands to summary
+      shell: bash
+      env:
+        REGISTRY: "oci://${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }}"
+      run: |
+        # Write Provenance Verification to Summary
+        echo "### Attestation Verification" >> $GITHUB_STEP_SUMMARY
+        echo "- Verify Provenance" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "gh attestation verify --repo ${{ github.repository }} --signer-repo celo-org/reusable-workflows $REGISTRY --format json | jq" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+        # Write SBOM Verification to Summary
+        echo "- Verify SBOM" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "gh attestation verify --repo ${{ github.repository }} --signer-repo celo-org/reusable-workflows $REGISTRY --predicate-type https://spdx.dev/Document/v2.3 --format json | jq" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
