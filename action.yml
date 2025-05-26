@@ -70,30 +70,6 @@ inputs:
       Enables posting comments on pull requests with details about the build process and results.
     default: true
 
-  trivy-timeout:
-    type: string
-    description: >
-      The timeout value for Trivy vulnerability scanning. Specify in a duration format (e.g., `15m` for 15 minutes).
-    default: 15m
-
-  trivy-enabled:
-    type: boolean
-    description: >
-      Indicates whether Trivy vulnerability scanning is enabled.
-    default: true
-
-  trivy-skip-dirs:
-    type: string
-    description: >
-      Comma-separated list of directories to skip during Trivy vulnerability scanning.
-    required: false
-
-  skip-setup-trivy:
-    type: boolean
-    description: >
-      Indicates whether the setup process for Trivy should be skipped.
-    default: false
-
 outputs:
   app-name:
     description: >
