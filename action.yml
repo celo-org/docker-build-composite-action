@@ -139,7 +139,7 @@ runs:
         file: ${{ inputs.dockerfile }}
         context: ${{ inputs.context }}
         cache-from: type=registry,ref=${{ inputs.registry }}:buildcache
-        cache-to: type=local,dest=cache
+        cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
         tags: ${{ steps.process_tags.outputs.processed }}
         load: true
         build-args: ${{ inputs.build-args }}
@@ -169,7 +169,7 @@ runs:
         push: ${{ fromJSON(inputs.push) }}
         tags: ${{ steps.process_tags.outputs.processed }}
         build-args: ${{ inputs.build-args }}
-        cache-from: type=local,src=cache
+        cache-from: type=local,src=/tmp/.buildx-cache
         cache-to: type=registry,ref=${{ inputs.registry }}:buildcache,mode=max
         provenance: ${{ fromJSON(false) }}
 
@@ -191,6 +191,7 @@ runs:
         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
         push-to-registry: true
 
+
     - uses: anchore/sbom-action@v0
       id: build-sbom
       with:
@@ -198,8 +199,20 @@ runs:
         output-file: ./sbom.spdx.json
         artifact-name: sbom-${{ steps.attestation-artifact-name.outputs.name }}.spdx.json
         dependency-snapshot: true
+
+
+    - name: Check SBOM size
+      # GitHub Actions predicate files must be <= 16MB; skip attestation if too large
+      run: |
+        FILE="./sbom.spdx.json"
+        MAX=16777216
+        if [ $(stat -c%s "$FILE") -ge $MAX ]; then
+          echo "::error::SBOM file too large. Skipping upload."
+          echo "LARGE_SBOM=true" >> $GITHUB_ENV
+        fi
      
     - name: Generate SBOM attestation
+      if: env.LARGE_SBOM != true
       uses: actions/attest-sbom@v1
       with:
         subject-name: ${{ inputs.registry }}
@@ -220,7 +233,9 @@ runs:
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
         # Write SBOM Verification to Summary
-        echo "- Verify SBOM" >> $GITHUB_STEP_SUMMARY
-        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-        echo "gh attestation verify --repo ${{ github.repository }} --signer-repo celo-org/reusable-workflows $REGISTRY --predicate-type https://spdx.dev/Document/v2.3 --format json | jq" >> $GITHUB_STEP_SUMMARY
-        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        if [ "${LARGE_SBOM}" != "true" ]; then
+          echo "- Verify SBOM" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "gh attestation verify --repo ${{ github.repository }} --signer-repo celo-org/reusable-workflows $REGISTRY --predicate-type https://spdx.dev/Document/v2.3 --format json | jq" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        fi
