@@ -233,7 +233,7 @@ runs:
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
         # Write SBOM Verification to Summary
-        if [ "${LARGE_SBOM}" = "true" ]; then
+        if [ "${LARGE_SBOM}" != "true" ]; then
           echo "- Verify SBOM" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "gh attestation verify --repo ${{ github.repository }} --signer-repo celo-org/reusable-workflows $REGISTRY --predicate-type https://spdx.dev/Document/v2.3 --format json | jq" >> $GITHUB_STEP_SUMMARY
