@@ -202,6 +202,7 @@ runs:
 
 
     - name: Check SBOM size
+      shell: bash
       # GitHub Actions predicate files must be <= 16MB; skip attestation if too large
       run: |
         FILE="./sbom.spdx.json"
