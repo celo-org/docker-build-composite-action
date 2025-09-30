@@ -202,17 +202,25 @@ runs:
 
 
     - name: Check SBOM size
+      id: sbom-size-check
+      shell: bash
       # GitHub Actions predicate files must be <= 16MB; skip attestation if too large
       run: |
         FILE="./sbom.spdx.json"
         MAX=16777216
-        if [ $(stat -c%s "$FILE") -ge $MAX ]; then
-          echo "::error::SBOM file too large. Skipping upload."
-          echo "LARGE_SBOM=true" >> $GITHUB_ENV
+        FILE_SIZE=$(stat -c%s "$FILE")
+        echo "File size: $FILE_SIZE bytes (limit: $MAX bytes)"
+        
+        if [ $FILE_SIZE -ge $MAX ]; then
+          echo "::warning::SBOM file ($FILE_SIZE bytes) exceeds 16MB limit. Skipping attestation upload."
+          echo "skip_attestation=true" >> $GITHUB_OUTPUT
+        else
+          echo "SBOM file size is within limits. Proceeding with attestation."
+          echo "skip_attestation=false" >> $GITHUB_OUTPUT
         fi
      
     - name: Generate SBOM attestation
-      if: env.LARGE_SBOM != true
+      if: steps.sbom-size-check.outputs.skip_attestation != 'true'
       uses: actions/attest-sbom@v1
       with:
         subject-name: ${{ inputs.registry }}
@@ -233,7 +241,7 @@ runs:
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
         # Write SBOM Verification to Summary
-        if [ "${LARGE_SBOM}" != "true" ]; then
+        if [ "${{ steps.sbom-size-check.outputs.skip_attestation }}" != "true" ]; then
           echo "- Verify SBOM" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "gh attestation verify --repo ${{ github.repository }} --signer-repo celo-org/reusable-workflows $REGISTRY --predicate-type https://spdx.dev/Document/v2.3 --format json | jq" >> $GITHUB_STEP_SUMMARY
