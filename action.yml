@@ -70,6 +70,12 @@ inputs:
       Enables posting comments on pull requests with details about the build process and results.
     default: true
 
+  attestation:
+    type: boolean
+    description: >
+      Enables artifact and SBOM attestation generation for the built image.
+    default: true
+
 outputs:
   app-name:
     description: >
@@ -174,6 +180,7 @@ runs:
         provenance: ${{ fromJSON(false) }}
 
     - name: Extract image name from registry for the SBOM attestation artifact name
+      if: ${{ fromJSON(inputs.attestation) }}
       id: attestation-artifact-name
       env:
         IMAGE: ${{ steps.process_tags.outputs.first_tag }}
@@ -184,6 +191,7 @@ runs:
         echo "name=$stripped_name" >> $GITHUB_OUTPUT
 
     - name: Generate artifact attestation
+      if: ${{ fromJSON(inputs.attestation) }}
       id: attestation
       uses: actions/attest-build-provenance@v2
       with:
@@ -193,6 +201,7 @@ runs:
 
 
     - uses: anchore/sbom-action@v0
+      if: ${{ fromJSON(inputs.attestation) }}
       id: build-sbom
       with:
         image: ${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }}
@@ -202,6 +211,7 @@ runs:
 
 
     - name: Check SBOM size
+      if: ${{ fromJSON(inputs.attestation) }}
       id: sbom-size-check
       shell: bash
       # GitHub Actions predicate files must be <= 16MB; skip attestation if too large
@@ -220,7 +230,7 @@ runs:
         fi
      
     - name: Generate SBOM attestation
-      if: steps.sbom-size-check.outputs.skip_attestation != 'true'
+      if: ${{ fromJSON(inputs.attestation) && steps.sbom-size-check.outputs.skip_attestation != 'true' }}
       uses: actions/attest-sbom@v1
       with:
         subject-name: ${{ inputs.registry }}
@@ -229,6 +239,7 @@ runs:
         push-to-registry: true 
 
     - name: Add commands to summary
+      if: ${{ fromJSON(inputs.attestation) }}
       shell: bash
       env:
         REGISTRY: "oci://${{ inputs.registry }}@${{ steps.docker-build-push.outputs.digest }}"
