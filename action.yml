@@ -84,7 +84,7 @@ runs:
       run: |
         echo "timestamp=$(date +%s)" >> $GITHUB_OUTPUT
         echo "::notice::🚀 Workflow started at $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
-    
+
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
 
@@ -101,14 +101,14 @@ runs:
         START_TIME=$(date +%s)
         echo "::group::Processing tags"
         echo "::notice::⏱️ Started processing tags at $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
-        
+
         function process_tags() {
             local processed_tags=()
 
-            # split tag field on comma character and add project + ${{ env.REGISTRY }} + image_name 
+            # split tag field on comma character and add project + ${{ env.REGISTRY }} + image_name
             IFS=',' read -ra tags <<< "${{ env.TAGS }}"
             for tag in "${tags[@]}"; do
-                case "$tag" in 
+                case "$tag" in
                 *:*)
                     # tag includes ':' - assume preprocessed and just pass to output
                     processed_tags+=("$tag")
@@ -134,7 +134,7 @@ runs:
             echo "::debug::first_tag=${processed_tags[0]}"
         }
         process_tags
-        
+
         END_TIME=$(date +%s)
         DURATION=$((END_TIME - START_TIME))
         echo "::notice::✅ Tag processing completed in ${DURATION}s"
@@ -146,51 +146,54 @@ runs:
       run: |
         echo "timestamp=$(date +%s)" >> $GITHUB_OUTPUT
         echo "::notice::🏗️ Starting container image build at $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
-    
-    - name: Build container image
+
+    - name: Build container image and save locally
       uses: docker/build-push-action@v6
       env:
-        DOCKER_BUILD_SUMMARY: false 
+        DOCKER_BUILD_SUMMARY: false
+        BUILDKIT_INLINE_CACHE: 1
       id: docker-build
       with:
         platforms: ${{ inputs.runner-platform }}
         file: ${{ inputs.dockerfile }}
         context: ${{ inputs.context }}
-        cache-from: type=registry,ref=${{ inputs.registry }}:buildcache
-        cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
+        cache-from: |
+          type=registry,ref=${{ inputs.registry }}:buildcache
+          type=registry,ref=${{ inputs.registry }}:latest
+        cache-to: type=inline
         tags: ${{ steps.process_tags.outputs.processed }}
         load: true
         build-args: ${{ inputs.build-args }}
-    
+
     - name: Track build completion time
       shell: bash
       run: |
         END_TIME=$(date +%s)
         DURATION=$((END_TIME - ${{ steps.build-start-time.outputs.timestamp }}))
         echo "::notice::✅ Container image build completed in ${DURATION}s"
-         
+
     - name: Scan for OIDC credentials
       shell: bash
       run: |
         START_TIME=$(date +%s)
         echo "::group::Scanning for OIDC credentials"
         echo "::notice::🔍 Started OIDC credential scan at $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
-        
+
         set +e
         docker create --name="tmp_container" ${{ steps.docker-build.outputs.imageid }}
         found=$(docker export tmp_container | tar tf - | grep -e "gha-creds-.*.json" | wc -l)
         docker rm tmp_container > /dev/null 2>&1
-        
+
         END_TIME=$(date +%s)
         DURATION=$((END_TIME - START_TIME))
-        
+
         if [ $found -ge 1 ]; then
             echo "::error::Found oidc credentials\nAdd the following line to your .dockerignore file\ngha-creds-*.json"
             echo "::notice::❌ OIDC scan failed in ${DURATION}s"
         else
             echo "::notice::✅ OIDC scan completed successfully in ${DURATION}s"
         fi
-        
+
         echo "::endgroup::"
         exit "$found"
 
@@ -201,10 +204,11 @@ runs:
       run: |
         echo "timestamp=$(date +%s)" >> $GITHUB_OUTPUT
         echo "::notice::🚀 Starting multi-platform build and push at $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
-    
+
     - name: Build and push
       env:
         DOCKER_BUILD_SUMMARY: ${{ inputs.summary }}
+        BUILDKIT_INLINE_CACHE: 1
       if: ${{ inputs.push }} == true
       uses: docker/build-push-action@v6
       id: docker-build-push
@@ -215,10 +219,12 @@ runs:
         push: ${{ fromJSON(inputs.push) }}
         tags: ${{ steps.process_tags.outputs.processed }}
         build-args: ${{ inputs.build-args }}
-        cache-from: type=local,src=/tmp/.buildx-cache
-        cache-to: type=registry,ref=${{ inputs.registry }}:buildcache,mode=max
+        cache-from: |
+          type=registry,ref=${{ inputs.registry }}:buildcache
+          type=inline
+        cache-to: type=registry,ref=${{ inputs.registry }}:buildcache,mode=max,oci-mediatypes=true
         provenance: ${{ fromJSON(false) }}
-    
+
     - name: Track build and push completion time
       if: ${{ inputs.push }} == true
       shell: bash
@@ -234,7 +240,7 @@ runs:
       run: |
         echo "timestamp=$(date +%s)" >> $GITHUB_OUTPUT
         echo "::notice::📜 Starting attestation generation at $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
-    
+
     - name: Extract image name from registry for the SBOM attestation artifact name
       if: ${{ fromJSON(inputs.attestation) }}
       id: attestation-artifact-name
@@ -300,7 +306,7 @@ runs:
         MAX=16777216
         FILE_SIZE=$(stat -c%s "$FILE")
         echo "::notice::📏 Checking SBOM size: $FILE_SIZE bytes (limit: $MAX bytes)"
-        
+
         if [ $FILE_SIZE -ge $MAX ]; then
           echo "::warning::SBOM file ($FILE_SIZE bytes) exceeds 16MB limit. Skipping attestation upload."
           echo "skip_attestation=true" >> $GITHUB_OUTPUT
@@ -308,11 +314,11 @@ runs:
           echo "::notice::✅ SBOM file size is within limits. Proceeding with attestation."
           echo "skip_attestation=false" >> $GITHUB_OUTPUT
         fi
-        
+
         END_TIME=$(date +%s)
         DURATION=$((END_TIME - START_TIME))
         echo "::notice::⏱️ SBOM size check completed in ${DURATION}s"
-     
+
     - name: Track SBOM attestation start time
       if: ${{ fromJSON(inputs.attestation) && steps.sbom-size-check.outputs.skip_attestation != 'true' }}
       id: sbom-attestation-start-time
@@ -320,7 +326,7 @@ runs:
       run: |
         echo "timestamp=$(date +%s)" >> $GITHUB_OUTPUT
         echo "::notice::📋 Starting SBOM attestation at $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
-    
+
     - name: Generate SBOM attestation
       if: ${{ fromJSON(inputs.attestation) && steps.sbom-size-check.outputs.skip_attestation != 'true' }}
       uses: actions/attest-sbom@v1
@@ -329,14 +335,14 @@ runs:
         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
         sbom-path: sbom.spdx.json
         push-to-registry: true
-    
+
     - name: Track SBOM attestation completion
       if: ${{ fromJSON(inputs.attestation) && steps.sbom-size-check.outputs.skip_attestation != 'true' }}
       shell: bash
       run: |
         END_TIME=$(date +%s)
         DURATION=$((END_TIME - ${{ steps.sbom-attestation-start-time.outputs.timestamp }}))
-        echo "::notice::✅ SBOM attestation completed in ${DURATION}s" 
+        echo "::notice::✅ SBOM attestation completed in ${DURATION}s"
 
     - name: Add commands to summary
       if: ${{ fromJSON(inputs.attestation) }}
@@ -358,7 +364,7 @@ runs:
           echo "gh attestation verify --repo ${{ github.repository }} --signer-repo celo-org/reusable-workflows $REGISTRY --predicate-type https://spdx.dev/Document/v2.3 --format json | jq" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
         fi
-    
+
     - name: Workflow completion summary
       if: always()
       shell: bash
@@ -367,10 +373,10 @@ runs:
         TOTAL_DURATION=$((END_TIME - ${{ steps.workflow-start-time.outputs.timestamp }}))
         MINUTES=$((TOTAL_DURATION / 60))
         SECONDS=$((TOTAL_DURATION % 60))
-        
+
         echo "::notice::🎉 Workflow completed at $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
         echo "::notice::⏱️ Total workflow duration: ${MINUTES}m ${SECONDS}s (${TOTAL_DURATION}s)"
-        
+
         # Add timing summary to GitHub Step Summary
         {
           echo ""
