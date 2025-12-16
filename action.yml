@@ -159,7 +159,6 @@ runs:
         context: ${{ inputs.context }}
         cache-from: |
           type=registry,ref=${{ inputs.registry }}:buildcache
-          type=registry,ref=${{ inputs.registry }}:latest
         cache-to: type=inline
         tags: ${{ steps.process_tags.outputs.processed }}
         load: true
