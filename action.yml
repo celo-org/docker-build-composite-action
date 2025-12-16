@@ -5,7 +5,6 @@ description: >
 
 inputs:
   runner-platform:
-    type: string
     description: >
       Specifies the platform of the GitHub runner for build testing. Commonly used to test builds on various architectures.
       Default is `linux/amd64`.
@@ -13,26 +12,22 @@ inputs:
     default: linux/amd64
 
   platforms:
-    type: string
     description: >
       Comma-separated list of image platforms to target during the build process (e.g., `linux/amd64,linux/arm64`).
     required: true
     default: linux/amd64
 
   context:
-    type: string
     description: >
       The build context path for Docker. Typically, this is the directory where the Dockerfile and associated files are located.
     required: true
 
   dockerfile:
-    type: string
     description: >
       The path to the Dockerfile to use for building the image. This should be relative to the context path.
     required: true
 
   push:
-    type: string
     description: >
       Indicates whether the image should be pushed to the remote registry. Requires prior authentication to the registry.
       Either `push` or `load` must be set to `true`.
@@ -40,41 +35,35 @@ inputs:
     default: 'true'
 
   build-args:
-    type: string
     description: >
       A list of build-time variables to pass to the Docker build process. Use a comma-separated format.
     required: false
 
   registry:
-    type: string
     description: >
       The registry to which the image will be pushed (e.g., `docker.io/my-repo` or `ghcr.io/my-org`).
     required: true
 
   tags:
-    type: string
     description: >
       A comma-separated list of tags to apply to the image. For example, `latest,v1.0,v1.0.0`.
     required: true
     default: latest
 
   summary:
-    type: boolean
     description: >
       Enables the generation of a GitHub Action summary for the build process.
-    default: true
+    default: 'true'
 
   pr-comment:
-    type: boolean
     description: >
       Enables posting comments on pull requests with details about the build process and results.
-    default: true
+    default: 'true'
 
   attestation:
-    type: boolean
     description: >
       Enables artifact and SBOM attestation generation for the built image.
-    default: true
+    default: 'true'
 
 outputs:
   app-name:
@@ -89,6 +78,13 @@ outputs:
 runs:
   using: "composite"
   steps:
+    - name: Track workflow start time
+      id: workflow-start-time
+      shell: bash
+      run: |
+        echo "timestamp=$(date +%s)" >> $GITHUB_OUTPUT
+        echo "::notice::🚀 Workflow started at $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+    
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
 
@@ -102,6 +98,10 @@ runs:
         TAGS: ${{ inputs.tags }}
       shell: bash
       run: |
+        START_TIME=$(date +%s)
+        echo "::group::Processing tags"
+        echo "::notice::⏱️ Started processing tags at $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+        
         function process_tags() {
             local processed_tags=()
 
@@ -134,7 +134,19 @@ runs:
             echo "::debug::first_tag=${processed_tags[0]}"
         }
         process_tags
+        
+        END_TIME=$(date +%s)
+        DURATION=$((END_TIME - START_TIME))
+        echo "::notice::✅ Tag processing completed in ${DURATION}s"
+        echo "::endgroup::"
 
+    - name: Track build start time
+      id: build-start-time
+      shell: bash
+      run: |
+        echo "timestamp=$(date +%s)" >> $GITHUB_OUTPUT
+        echo "::notice::🏗️ Starting container image build at $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+    
     - name: Build container image
       uses: docker/build-push-action@v6
       env:
@@ -149,19 +161,47 @@ runs:
         tags: ${{ steps.process_tags.outputs.processed }}
         load: true
         build-args: ${{ inputs.build-args }}
+    
+    - name: Track build completion time
+      shell: bash
+      run: |
+        END_TIME=$(date +%s)
+        DURATION=$((END_TIME - ${{ steps.build-start-time.outputs.timestamp }}))
+        echo "::notice::✅ Container image build completed in ${DURATION}s"
          
     - name: Scan for OIDC credentials
       shell: bash
       run: |
-        echo "Scanning for oidc credentials"
+        START_TIME=$(date +%s)
+        echo "::group::Scanning for OIDC credentials"
+        echo "::notice::🔍 Started OIDC credential scan at $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+        
         set +e
         docker create --name="tmp_container" ${{ steps.docker-build.outputs.imageid }}
         found=$(docker export tmp_container | tar tf - | grep -e "gha-creds-.*.json" | wc -l)
+        docker rm tmp_container > /dev/null 2>&1
+        
+        END_TIME=$(date +%s)
+        DURATION=$((END_TIME - START_TIME))
+        
         if [ $found -ge 1 ]; then
-            echo -e "::error::Found oidc credentials\nAdd the following line to your .dockerignore file\ngha-creds-*.json"
+            echo "::error::Found oidc credentials\nAdd the following line to your .dockerignore file\ngha-creds-*.json"
+            echo "::notice::❌ OIDC scan failed in ${DURATION}s"
+        else
+            echo "::notice::✅ OIDC scan completed successfully in ${DURATION}s"
         fi
+        
+        echo "::endgroup::"
         exit "$found"
 
+    - name: Track build and push start time
+      if: ${{ inputs.push }} == true
+      id: build-push-start-time
+      shell: bash
+      run: |
+        echo "timestamp=$(date +%s)" >> $GITHUB_OUTPUT
+        echo "::notice::🚀 Starting multi-platform build and push at $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+    
     - name: Build and push
       env:
         DOCKER_BUILD_SUMMARY: ${{ inputs.summary }}
@@ -178,7 +218,23 @@ runs:
         cache-from: type=local,src=/tmp/.buildx-cache
         cache-to: type=registry,ref=${{ inputs.registry }}:buildcache,mode=max
         provenance: ${{ fromJSON(false) }}
+    
+    - name: Track build and push completion time
+      if: ${{ inputs.push }} == true
+      shell: bash
+      run: |
+        END_TIME=$(date +%s)
+        DURATION=$((END_TIME - ${{ steps.build-push-start-time.outputs.timestamp }}))
+        echo "::notice::✅ Multi-platform build and push completed in ${DURATION}s"
 
+    - name: Track attestation start time
+      if: ${{ fromJSON(inputs.attestation) }}
+      id: attestation-start-time
+      shell: bash
+      run: |
+        echo "timestamp=$(date +%s)" >> $GITHUB_OUTPUT
+        echo "::notice::📜 Starting attestation generation at $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+    
     - name: Extract image name from registry for the SBOM attestation artifact name
       if: ${{ fromJSON(inputs.attestation) }}
       id: attestation-artifact-name
@@ -199,6 +255,21 @@ runs:
         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
         push-to-registry: true
 
+    - name: Track artifact attestation completion
+      if: ${{ fromJSON(inputs.attestation) }}
+      shell: bash
+      run: |
+        END_TIME=$(date +%s)
+        DURATION=$((END_TIME - ${{ steps.attestation-start-time.outputs.timestamp }}))
+        echo "::notice::✅ Artifact attestation completed in ${DURATION}s"
+
+    - name: Track SBOM generation start time
+      if: ${{ fromJSON(inputs.attestation) }}
+      id: sbom-start-time
+      shell: bash
+      run: |
+        echo "timestamp=$(date +%s)" >> $GITHUB_OUTPUT
+        echo "::notice::📋 Starting SBOM generation at $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
 
     - uses: anchore/sbom-action@v0
       if: ${{ fromJSON(inputs.attestation) }}
@@ -209,6 +280,14 @@ runs:
         artifact-name: sbom-${{ steps.attestation-artifact-name.outputs.name }}.spdx.json
         dependency-snapshot: true
 
+    - name: Track SBOM generation completion
+      if: ${{ fromJSON(inputs.attestation) }}
+      shell: bash
+      run: |
+        END_TIME=$(date +%s)
+        DURATION=$((END_TIME - ${{ steps.sbom-start-time.outputs.timestamp }}))
+        echo "::notice::✅ SBOM generation completed in ${DURATION}s"
+
 
     - name: Check SBOM size
       if: ${{ fromJSON(inputs.attestation) }}
@@ -216,19 +295,32 @@ runs:
       shell: bash
       # GitHub Actions predicate files must be <= 16MB; skip attestation if too large
       run: |
+        START_TIME=$(date +%s)
         FILE="./sbom.spdx.json"
         MAX=16777216
         FILE_SIZE=$(stat -c%s "$FILE")
-        echo "File size: $FILE_SIZE bytes (limit: $MAX bytes)"
+        echo "::notice::📏 Checking SBOM size: $FILE_SIZE bytes (limit: $MAX bytes)"
         
         if [ $FILE_SIZE -ge $MAX ]; then
           echo "::warning::SBOM file ($FILE_SIZE bytes) exceeds 16MB limit. Skipping attestation upload."
           echo "skip_attestation=true" >> $GITHUB_OUTPUT
         else
-          echo "SBOM file size is within limits. Proceeding with attestation."
+          echo "::notice::✅ SBOM file size is within limits. Proceeding with attestation."
           echo "skip_attestation=false" >> $GITHUB_OUTPUT
         fi
+        
+        END_TIME=$(date +%s)
+        DURATION=$((END_TIME - START_TIME))
+        echo "::notice::⏱️ SBOM size check completed in ${DURATION}s"
      
+    - name: Track SBOM attestation start time
+      if: ${{ fromJSON(inputs.attestation) && steps.sbom-size-check.outputs.skip_attestation != 'true' }}
+      id: sbom-attestation-start-time
+      shell: bash
+      run: |
+        echo "timestamp=$(date +%s)" >> $GITHUB_OUTPUT
+        echo "::notice::📋 Starting SBOM attestation at $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+    
     - name: Generate SBOM attestation
       if: ${{ fromJSON(inputs.attestation) && steps.sbom-size-check.outputs.skip_attestation != 'true' }}
       uses: actions/attest-sbom@v1
@@ -236,7 +328,15 @@ runs:
         subject-name: ${{ inputs.registry }}
         subject-digest: ${{ steps.docker-build-push.outputs.digest }}
         sbom-path: sbom.spdx.json
-        push-to-registry: true 
+        push-to-registry: true
+    
+    - name: Track SBOM attestation completion
+      if: ${{ fromJSON(inputs.attestation) && steps.sbom-size-check.outputs.skip_attestation != 'true' }}
+      shell: bash
+      run: |
+        END_TIME=$(date +%s)
+        DURATION=$((END_TIME - ${{ steps.sbom-attestation-start-time.outputs.timestamp }}))
+        echo "::notice::✅ SBOM attestation completed in ${DURATION}s" 
 
     - name: Add commands to summary
       if: ${{ fromJSON(inputs.attestation) }}
@@ -258,3 +358,24 @@ runs:
           echo "gh attestation verify --repo ${{ github.repository }} --signer-repo celo-org/reusable-workflows $REGISTRY --predicate-type https://spdx.dev/Document/v2.3 --format json | jq" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
         fi
+    
+    - name: Workflow completion summary
+      if: always()
+      shell: bash
+      run: |
+        END_TIME=$(date +%s)
+        TOTAL_DURATION=$((END_TIME - ${{ steps.workflow-start-time.outputs.timestamp }}))
+        MINUTES=$((TOTAL_DURATION / 60))
+        SECONDS=$((TOTAL_DURATION % 60))
+        
+        echo "::notice::🎉 Workflow completed at $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+        echo "::notice::⏱️ Total workflow duration: ${MINUTES}m ${SECONDS}s (${TOTAL_DURATION}s)"
+        
+        # Add timing summary to GitHub Step Summary
+        {
+          echo ""
+          echo "### ⏱️ Workflow Timing Summary"
+          echo "- **Total Duration**: ${MINUTES}m ${SECONDS}s"
+          echo "- **Started**: $(date -u -d @${{ steps.workflow-start-time.outputs.timestamp }} +"%Y-%m-%d %H:%M:%S UTC" 2>/dev/null || date -u -r ${{ steps.workflow-start-time.outputs.timestamp }} +"%Y-%m-%d %H:%M:%S UTC" 2>/dev/null || echo "N/A")"
+          echo "- **Completed**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+        } >> $GITHUB_STEP_SUMMARY
