@@ -221,7 +221,7 @@ runs:
         cache-from: |
           type=registry,ref=${{ inputs.registry }}:buildcache
           type=inline
-        cache-to: type=registry,ref=${{ inputs.registry }}:buildcache,mode=max,oci-mediatypes=true
+        cache-to: type=registry,ref=${{ inputs.registry }}:buildcache,mode=min,oci-mediatypes=true,compression=zstd
         provenance: ${{ fromJSON(false) }}
 
     - name: Track build and push completion time
