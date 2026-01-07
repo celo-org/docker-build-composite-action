@@ -90,6 +90,10 @@ runs:
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
+      with:
+        driver-opts: |
+          image=moby/buildkit:latest
+          cache-dir=/tmp/.buildx-cache
 
     - name: Conditionally format tags with full image + repo definition
       id: process_tags
@@ -207,7 +211,6 @@ runs:
     - name: Build and push
       env:
         DOCKER_BUILD_SUMMARY: ${{ inputs.summary }}
-        BUILDKIT_INLINE_CACHE: 1
       if: ${{ inputs.push }} == true
       uses: docker/build-push-action@v6
       id: docker-build-push
@@ -218,10 +221,8 @@ runs:
         push: ${{ fromJSON(inputs.push) }}
         tags: ${{ steps.process_tags.outputs.processed }}
         build-args: ${{ inputs.build-args }}
-        cache-from: |
-          type=registry,ref=${{ inputs.registry }}:buildcache
-          type=inline
-        cache-to: type=registry,ref=${{ inputs.registry }}:buildcache,mode=min,oci-mediatypes=true,compression=zstd
+        cache-from: type=registry,ref=${{ inputs.registry }}:buildcache
+        cache-to: type=registry,ref=${{ inputs.registry }}:buildcache,mode=max,oci-mediatypes=true
         provenance: ${{ fromJSON(false) }}
 
     - name: Track build and push completion time
