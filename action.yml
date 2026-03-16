@@ -148,7 +148,7 @@ runs:
         echo "::notice::🏗️ Starting container image build at $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
 
     - name: Build container image and save locally
-      uses: docker/build-push-action@v6
+      uses: docker/build-push-action@v7
       env:
         DOCKER_BUILD_SUMMARY: false
         BUILDKIT_INLINE_CACHE: 1
@@ -209,7 +209,7 @@ runs:
         DOCKER_BUILD_SUMMARY: ${{ inputs.summary }}
         BUILDKIT_INLINE_CACHE: 1
       if: ${{ inputs.push }} == true
-      uses: docker/build-push-action@v6
+      uses: docker/build-push-action@v7
       id: docker-build-push
       with:
         platforms: ${{ inputs.platforms }}
