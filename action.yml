@@ -39,6 +39,13 @@ inputs:
       A list of build-time variables to pass to the Docker build process. Use a comma-separated format.
     required: false
 
+  secrets:
+    type: string
+    description: >
+      Newline-separated list of secrets to pass to docker build (e.g. 'github_token=ghp_xxx').
+      Exposed via --mount=type=secret in Dockerfile RUN steps.
+    required: false
+
   registry:
     description: >
       The registry to which the image will be pushed (e.g., `docker.io/my-repo` or `ghcr.io/my-org`).
@@ -163,6 +170,7 @@ runs:
         tags: ${{ steps.process_tags.outputs.processed }}
         load: true
         build-args: ${{ inputs.build-args }}
+        secrets: ${{ inputs.secrets }}
 
     - name: Track build completion time
       shell: bash
@@ -218,6 +226,7 @@ runs:
         push: ${{ fromJSON(inputs.push) }}
         tags: ${{ steps.process_tags.outputs.processed }}
         build-args: ${{ inputs.build-args }}
+        secrets: ${{ inputs.secrets }}
         cache-from: |
           type=registry,ref=${{ inputs.registry }}:buildcache
           type=inline
@@ -292,7 +301,6 @@ runs:
         END_TIME=$(date +%s)
         DURATION=$((END_TIME - ${{ steps.sbom-start-time.outputs.timestamp }}))
         echo "::notice::✅ SBOM generation completed in ${DURATION}s"
-
 
     - name: Check SBOM size
       if: ${{ fromJSON(inputs.attestation) }}
